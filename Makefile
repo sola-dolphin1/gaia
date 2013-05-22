@@ -114,6 +114,7 @@ LOCALES_FILE?=shared/resources/languages.json
 GAIA_LOCALE_SRCDIRS=shared $(GAIA_APP_SRCDIRS)
 GAIA_DEFAULT_LOCALE?=en-US
 GAIA_INLINE_LOCALES?=1
+MOZILLA_OFFICIAL=1
 
 ###############################################################################
 # The above rules generate the profile/ folder and all its content.           #
