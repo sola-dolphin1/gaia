@@ -52,7 +52,6 @@ var ThreadUI = global.ThreadUI = {
   // Time buffer for the 'last-messages' set. In this case 10 min
   LAST_MESSSAGES_BUFFERING_TIME: 10 * 60 * 1000,
   CHUNK_SIZE: 10,
-  TO_FIELD_HEIGHT: 5.7,
   // duration of the notification that message type was converted
   CONVERTED_MESSAGE_DURATION: 3000,
   recipients: null,
@@ -191,6 +190,11 @@ var ThreadUI = global.ThreadUI = {
 
     // Initialized here, but used in ThreadUI.cleanFields
     this.previousHash = null;
+
+    // Cache fixed measurement while init
+    var style = window.getComputedStyle(this.input, null);
+    this.INPUT_PADDING = parseInt(style.getPropertyValue('padding-top'), 10) +
+      parseInt(style.getPropertyValue('padding-bottom'), 10);
   },
 
   // Initialize Recipients list and Recipients.View (DOM)
@@ -377,16 +381,14 @@ var ThreadUI = global.ThreadUI = {
 
   setInputMaxHeight: function thui_setInputMaxHeight() {
     // Method for initializing the maximum height
-    var fontSize = Utils.getFontSize();
-    var viewHeight = this.container.offsetHeight / fontSize;
-    var inputHeight = this.input.offsetHeight / fontSize;
-    var barHeight =
-      document.getElementById('messages-compose-form').offsetHeight / fontSize;
-    var adjustment = barHeight - inputHeight;
+    // Set the input height to:
+    // view height - (vertical padding (+ to field height if edit new message))
+    var viewHeight = this.container.offsetHeight;
+    var adjustment = this.INPUT_PADDING;
     if (window.location.hash === '#new') {
-      adjustment += this.TO_FIELD_HEIGHT;
+      adjustment += this.toField.offsetHeight;
     }
-    this.input.style.maxHeight = (viewHeight - adjustment) + 'rem';
+    this.input.style.maxHeight = (viewHeight - adjustment) + 'px';
   },
 
   back: function thui_back() {
@@ -521,11 +523,7 @@ var ThreadUI = global.ThreadUI = {
     // First of all we retrieve all CSS info which we need
     var inputCss = window.getComputedStyle(this.input, null);
     var inputMaxHeight = parseInt(inputCss.getPropertyValue('max-height'), 10);
-    var fontSize = Utils.getFontSize();
-    var verticalPadding =
-      (parseInt(inputCss.getPropertyValue('padding-top'), 10) +
-      parseInt(inputCss.getPropertyValue('padding-bottom'), 10)) /
-      fontSize;
+    var verticalPadding = this.INPUT_PADDING;
     var buttonHeight = this.sendButton.offsetHeight;
 
     // Retrieve elements useful in growing method
@@ -538,14 +536,13 @@ var ThreadUI = global.ThreadUI = {
     // This is when we have reached the header (UX requirement)
     if (this.input.scrollHeight > inputMaxHeight) {
       // Height of the input is the maximum
-      this.input.style.height = inputMaxHeight / fontSize + 'rem';
+      this.input.style.height = inputMaxHeight + 'px';
       // Update the bottom bar height taking into account the padding
-      bottomBar.style.height =
-        inputMaxHeight / fontSize + verticalPadding + 'rem';
+      bottomBar.style.height = (inputMaxHeight + verticalPadding) + 'px';
       // We update the position of the button taking into account the
       // new height
       this.sendButton.style.marginTop = this.attachButton.style.marginTop =
-        (this.input.offsetHeight - buttonHeight) / fontSize + 'rem';
+        (this.input.offsetHeight - buttonHeight) + 'px';
       return;
     }
 
@@ -554,19 +551,18 @@ var ThreadUI = global.ThreadUI = {
     // with additional margin for preventing scroll bar.
     this.input.style.height =
       this.input.offsetHeight > this.input.scrollHeight ?
-      this.input.offsetHeight / fontSize + 'rem' :
-      this.input.scrollHeight / fontSize + verticalPadding + 'rem';
+      this.input.offsetHeight + 'px' :
+      (this.input.scrollHeight + verticalPadding) + 'px';
 
     // We retrieve current height of the input
     var newHeight = this.input.getBoundingClientRect().height;
 
     // We calculate the height of the bottonBar which contains the input
-    var bottomBarHeight = (newHeight / fontSize + verticalPadding) + 'rem';
+    var bottomBarHeight = (newHeight + verticalPadding) + 'px';
     bottomBar.style.height = bottomBarHeight;
 
     // We move the button to the right position
-    var buttonOffset = (this.input.offsetHeight - buttonHeight) /
-      fontSize + 'rem';
+    var buttonOffset = (this.input.offsetHeight - buttonHeight) + 'px';
     this.sendButton.style.marginTop = this.attachButton.style.marginTop =
       buttonOffset;
 
@@ -775,6 +771,7 @@ var ThreadUI = global.ThreadUI = {
               URL.revokeObjectURL(this.src);
             };
           }
+          mediaElement.classList.add('mms-media');
           container.appendChild(mediaElement);
           attachmentMap.set(mediaElement, attachment);
         }
@@ -845,8 +842,48 @@ var ThreadUI = global.ThreadUI = {
     MessageManager.getMessages(renderingOptions);
   },
 
-  buildMessageDOM: function thui_buildMessageDOM(message, hidden) {
+  // generates the html for not-downloaded messages - pushes class names into
+  // the classNames array also passed in, returns an HTML string
+  _createNotDownloadedHTML:
+  function thui_createNotDownloadedHTML(message, classNames) {
+
     var _ = navigator.mozL10n.get;
+
+    // default strings:
+    var messageString = 'not-downloaded-mms';
+    var downloadString = 'download';
+
+    // assuming that incoming message only has one deliveryStatus
+    var status = message.deliveryStatus[0];
+
+    var expireFormatted = Utils.date.format.localeFormat(
+      message.expiryDate, _('dateTimeFormat_%x')
+    );
+
+    var expired = +message.expiryDate < Date.now();
+
+    if (expired) {
+      classNames.push('expired');
+      messageString = 'expired-mms';
+    }
+
+    if (status === 'error') {
+      classNames.push('error');
+    }
+
+    if (status === 'pending') {
+      downloadString = 'downloading';
+      classNames.push('pending');
+    }
+
+    messageString = _(messageString, { date: expireFormatted });
+    return this.tmpl.notDownloaded.interpolate({
+      message: messageString,
+      download: _(downloadString)
+    });
+  },
+
+  buildMessageDOM: function thui_buildMessageDOM(message, hidden) {
     var bodyHTML = '';
     var delivery = message.delivery;
     var messageDOM = document.createElement('li');
@@ -872,31 +909,7 @@ var ThreadUI = global.ThreadUI = {
     }
 
     if (notDownloaded) {
-      // default strings:
-      var messageString = 'not-downloaded-mms';
-
-      // assuming that incoming message only has one deliveryStatus
-      var status = message.deliveryStatus[0];
-      var expireFormatted = Utils.date.format.localeFormat(
-        message.expiryDate, _('dateTimeFormat_%x')
-      );
-
-      var expired = +message.expiryDate < Date.now();
-
-      if (expired) {
-        classNames.push('expired');
-        messageString = 'expired-mms';
-      }
-
-      if (status === 'error') {
-        classNames.push('error');
-      }
-
-      messageString = _(messageString, { date: expireFormatted });
-      bodyHTML = this.tmpl.notDownloaded.interpolate({
-        message: messageString,
-        download: _('download')
-      });
+      bodyHTML = this._createNotDownloadedHTML(message, classNames);
     }
 
     messageDOM.className = classNames.join(' ');
@@ -921,9 +934,19 @@ var ThreadUI = global.ThreadUI = {
   },
 
   appendMessage: function thui_appendMessage(message, hidden) {
-    // build messageDOM adding the links
-    var messageDOM = this.buildMessageDOM(message, hidden);
     var timestamp = message.timestamp.getTime();
+
+    // look for an old message and remove it first - prevent anything from ever
+    // double rendering for now
+    var messageDOM = this.container.querySelector(
+      '[data-message-id="' + message.id + '"]');
+    if (messageDOM) {
+      this.removeMessageDOM(messageDOM);
+    }
+
+    // build messageDOM adding the links
+    messageDOM = this.buildMessageDOM(message, hidden);
+
     messageDOM.dataset.timestamp = timestamp;
     // Add to the right position
     var messageContainer = ThreadUI.getMessageContainer(timestamp, hidden);
@@ -1358,13 +1381,13 @@ var ThreadUI = global.ThreadUI = {
       var current = tels[i];
       var number = current.value;
       var title = details.title || number;
+      var type = current.type ? (current.type + ' |') : '';
 
       var contactLi = document.createElement('li');
       var data = {
         name: Utils.escapeHTML(title),
         number: Utils.escapeHTML(number),
-        type: current.type || '',
-        carrier: current.carrier || '',
+        type: type,
         srcAttr: details.photoURL ?
           'src="' + Utils.escapeHTML(details.photoURL) + '"' : '',
         nameHTML: '',
