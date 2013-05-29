@@ -558,7 +558,7 @@ var ThreadUI = global.ThreadUI = {
     var newHeight = this.input.getBoundingClientRect().height;
 
     // We calculate the height of the bottonBar which contains the input
-    var bottomBarHeight = (newHeight + verticalPadding) + 'px';
+    var bottomBarHeight = newHeight + 'px';
     bottomBar.style.height = bottomBarHeight;
 
     // We move the button to the right position
@@ -698,6 +698,8 @@ var ThreadUI = global.ThreadUI = {
        *  and how many other contacts share that same number. We think it's
        *  user's responsability to correct this mess with the agenda.
        */
+      // Bug 867948: contacts null is a legitimate case, and
+      // getContactDetails is okay with that.
       var details = Utils.getContactDetails(number, contacts);
       var contactName = details.title || number;
 
@@ -1388,8 +1390,7 @@ var ThreadUI = global.ThreadUI = {
         name: Utils.escapeHTML(title),
         number: Utils.escapeHTML(number),
         type: type,
-        srcAttr: details.photoURL ?
-          'src="' + Utils.escapeHTML(details.photoURL) + '"' : '',
+        carrier: current.carrier || '',
         nameHTML: '',
         numberHTML: ''
       };
@@ -1407,18 +1408,9 @@ var ThreadUI = global.ThreadUI = {
       // Interpolate HTML template with data and inject.
       // Known "safe" HTML values will not be re-sanitized.
       contactLi.innerHTML = this.tmpl.contact.interpolate(data, {
-        safe: ['nameHTML', 'numberHTML', 'srcAttr']
+        safe: ['nameHTML', 'numberHTML']
       });
       contactsUl.appendChild(contactLi);
-
-      // Revoke contact photo after image onload.
-      var photo = contactLi.querySelector('img');
-      if (photo) {
-        photo.onload = photo.onerror = function revokePhotoURL() {
-          this.onload = this.onerror = null;
-          URL.revokeObjectURL(this.src);
-        };
-      }
     }
     return true;
   },

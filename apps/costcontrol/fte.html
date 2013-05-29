@@ -5,6 +5,9 @@
   <meta http-equiv="pragma" content="no-cache">
   <title data-l10n-id="fte">Usage First Time Experience</title>
 
+  <!-- multi-resolution support -->
+  <link rel="stylesheet" href="/shared/style/responsive.css">
+
   <!-- Building blocks Temporal -->
   <link rel="stylesheet" type="text/css" href="style/bb/filters/style.css">
   <link rel="stylesheet" type="text/css" href="style/bb/input-areas/style.css">
@@ -25,9 +28,6 @@
   <link rel="stylesheet" type="text/css" href="style/views/firsttime.css">
   <link rel="stylesheet" type="text/css" href="style/views/datalimits.css">
 
-  <!-- Multi-resolution support-->
-  <link rel="stylesheet" type="text/css" href="shared/style/responsive.css">
-
   <!-- Localization -->
   <link rel="resource" type="application/l10n" href="locales/locales.ini">
   <link rel="resource" type="application/l10n" href="shared/locales/date.ini" />
@@ -37,6 +37,7 @@
   <script type="text/javascript" src="shared/js/l10n_date.js"></script>
   <script type="text/javascript" src="shared/js/async_storage.js"></script>
   <script type="text/javascript" src="shared/js/settings_listener.js"></script>
+  <script type="text/javascript" src="shared/js/lazy_loader.js"></script>
 
   <!-- Specific code -->
   <script type="text/javascript" src="js/utils/debug.js"></script>
@@ -45,7 +46,7 @@
   <script type="text/javascript" defer src="js/utils/toolkit.js"></script>
   <script type="text/javascript" defer src="js/common.js"></script>
   <script type="text/javascript" defer src="js/costcontrol.js"></script>
-  <script type="text/javascript" defer src="js/config_manager.js"></script>
+  <script type="text/javascript" defer src="js/config/config_manager.js"></script>
   <script type="text/javascript" defer src="js/view_manager.js"></script>
   <script type="text/javascript" defer src="js/settings/limitdialog.js"></script>
   <script type="text/javascript" defer src="js/settings/autosettings.js"></script>
