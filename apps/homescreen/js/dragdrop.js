@@ -177,7 +177,7 @@ const DragDropManager = (function() {
    * {Object} This is the DOMElement which was tapped and hold
    */
   function onStart(elem) {
-    overlapElem = originElem = elem;
+    overlapElem = elem;
     draggableIcon = GridManager.getIcon(elem.dataset);
     draggableIcon.onDragStart(sx, sy);
     draggableElemStyle = draggableIcon.draggableElem.style;
@@ -296,7 +296,7 @@ const DragDropManager = (function() {
       clearTimeout(overlapingTimeout);
       if (classList.contains('page')) {
         var lastIcon = page.getLastIcon();
-        if (y > lastIcon.getTop() && draggableIcon !== lastIcon) {
+        if (lastIcon && y > lastIcon.getTop() && draggableIcon !== lastIcon) {
           overlapingTimeout = setTimeout(function() {
             page.drop(draggableIcon, lastIcon);
           }, REARRANGE_DELAY);
@@ -405,8 +405,9 @@ const DragDropManager = (function() {
       sy = initCoords.y;
       isDockDisabled = false;
       overlapingDock = (initCoords.y >= limitY) ? true : false;
-      onStart(evt.target.className === 'options' ? evt.target.parentNode :
-                                                   evt.target);
+      originElem = evt.target;
+      onStart(originElem.classList.contains('options') ? originElem.parentNode :
+                                                         originElem);
     }
   };
 }());
