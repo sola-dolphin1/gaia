@@ -17,9 +17,6 @@
       }
       return key;
     },
-    ready: function ready(handler) {
-      setTimeout(handler);
-    },
     DateTimeFormat: DateTimeFormat
   };
 

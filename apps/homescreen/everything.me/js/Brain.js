@@ -157,7 +157,7 @@ Evme.Brain = new function Evme_Brain() {
             }
 
             if (!tipKeyboard) {
-                tipKeyboard = new Evme.Tip(TIPS.SEARCHBAR_FOCUS).show();
+                tipKeyboard = new Evme.Tip(TIPS.SEARCHBAR_FOCUS);
             }
         };
 
@@ -818,11 +818,14 @@ Evme.Brain = new function Evme_Brain() {
                 Evme.BackgroundImage.cancelFullScreenFade();
                 elContainer.classList.remove("loading-app");
 
-                if (Evme.Storage.get(STORAGE_KEY_CLOSE_WHEN_RETURNING)) {
-                    Searcher.searchAgain();
-                }
-                Evme.Storage.remove(STORAGE_KEY_CLOSE_WHEN_RETURNING);
+                Evme.Storage.get(STORAGE_KEY_CLOSE_WHEN_RETURNING, function storageGot(value) {
+                    if (value) {
+                        Searcher.searchAgain(null, Evme.Searchbar.getValue());
+                    }
 
+                    Evme.Storage.remove(STORAGE_KEY_CLOSE_WHEN_RETURNING);
+                });
+                
                 Evme.EventHandler.trigger("Core", "returnedFromApp");
             }
         }
@@ -990,6 +993,8 @@ Evme.Brain = new function Evme_Brain() {
                         "iconsFormat": iconsFormat,
                         "offset": currentFolder.appsPaging.offset
                     });
+                    
+                    updateShortcutIcons(experienceId || query, apps);
 
                     requestSmartFolderApps = null;
                     
@@ -1048,6 +1053,30 @@ Evme.Brain = new function Evme_Brain() {
 
                 requestSmartFolderApps = null;
             });
+        };
+        
+        function updateShortcutIcons(key, apps) {
+          var shortcutsToUpdate = {},
+              icons = {},
+              numberOfIconsInShortcut = (Evme.Utils.getIconGroup() || []).length;
+              
+          for (var i=0,app; i<numberOfIconsInShortcut; i++) {
+            app = apps[i];
+            icons[app.id] = app.icon;
+          }
+          shortcutsToUpdate[key] = Object.keys(icons);
+          
+          Evme.DoATAPI.Shortcuts.update({
+            "shortcuts": shortcutsToUpdate,
+            "icons": icons
+          }, function onShortcutsUpdated() {
+            for (var key in shortcutsToUpdate) {
+              var shortcut = Evme.Shortcuts.getShortcutByKey(key);
+              if (shortcut) {
+                shortcut.setImage(shortcutsToUpdate[key]);
+              }
+            }
+          });
         }
     };
 
@@ -1068,7 +1097,7 @@ Evme.Brain = new function Evme_Brain() {
         this.show = function show() {
             new Evme.Tip(TIPS.APP_EXPLAIN, function onShow(tip) {
                 elContainer.addEventListener("touchstart", tip.hide);
-            }).show();
+            });
 
             Brain.Searchbar.hideKeyboardTip();
 
@@ -1239,24 +1268,34 @@ Evme.Brain = new function Evme_Brain() {
                     requestSuggest = Evme.DoATAPI.Shortcuts.suggest({
                         "existing": arrCurrentShortcuts
                     }, function onSuccess(data) {
-                        var suggestedShortcuts = data.response.shortcuts,
-                            icons = data.response.icons;
-    
-                        for (var id in icons) {
-                            currentIcons[id] = icons[id];
+                        var suggestedShortcuts = data.response.shortcuts || [],
+                            icons = data.response.icons || {};
+
+                        if(!isRequesting) {
+                          return;
                         }
-    
-                        Evme.ShortcutsCustomize.load({
-                            "shortcuts": suggestedShortcuts,
-                            "icons": currentIcons
-                        });
-    
+
                         isFirstShow = false;
                         isRequesting = false;
-                        Evme.ShortcutsCustomize.show();
-                        // setting timeout to give the select box enough time to show
-                        // otherwise there's visible flickering
-                        window.setTimeout(Evme.ShortcutsCustomize.Loading.hide, 300);
+
+                        if (suggestedShortcuts.length === 0) {
+                          window.alert(Evme.Utils.l10n(L10N_SYSTEM_ALERT, 'no-more-shortcuts'));
+                          Evme.ShortcutsCustomize.Loading.hide();
+                        } else {
+                          for (var id in icons) {
+                              currentIcons[id] = icons[id];
+                          }
+      
+                          Evme.ShortcutsCustomize.load({
+                              "shortcuts": suggestedShortcuts,
+                              "icons": currentIcons
+                          });
+      
+                          Evme.ShortcutsCustomize.show();
+                          // setting timeout to give the select box enough time to show
+                          // otherwise there's visible flickering
+                          window.setTimeout(Evme.ShortcutsCustomize.Loading.hide, 300);
+                        }
                     });
                 });
             });
@@ -1332,26 +1371,33 @@ Evme.Brain = new function Evme_Brain() {
                 return null;
             }
 
-            var onHelper = false;
+            var shouldSendCallback = true;
 
             if (options.query) {
                 for (var tipId in TIPS.HELPER) {
                     if (tipId == options.query.toUpperCase()) {
                         var helperTip = TIPS.HELPER[tipId];
 
-                        helperTip.timesShown = self.timesShown(helperTip);
+                        shouldSendCallback = false;
 
-                        if (self.timesShown(helperTip) < helperTip.timesToShow) {
-                            showHelperTip(helperTip, options);
-                            onHelper = true;
-                        }
+                        self.timesShown(helperTip, function timesShown(numberOfTimesShown) {
+                            helperTip.timesShown = numberOfTimesShown || 0;
 
+                            if (helperTip.timesShown < helperTip.timesToShow) {
+                                showHelperTip(helperTip, options);
+                                options.onFinish && options.onFinish(true);
+                            } else {
+                                options.onFinish && options.onFinish(false);
+                            }
+                        });
                         break;
                     }
                 }
             }
 
-            return onHelper;
+            if (shouldSendCallback) {
+                options.onFinish && options.onFinish(false);
+            }
         };
 
         function showHelperTip(tip, options) {
@@ -1365,8 +1411,8 @@ Evme.Brain = new function Evme_Brain() {
             Evme.Storage.set(tip.id, tip.timesShown);
         };
 
-        this.timesShown = function timesShown(tip) {
-            return Evme.Storage.get(tip.id) || 0;
+        this.timesShown = function timesShown(tip, callback) {
+            Evme.Storage.get(tip.id, callback);
         };
 
         this.isVisible = function isVisible() {
@@ -1670,8 +1716,13 @@ Evme.Brain = new function Evme_Brain() {
                     Evme.Helper.load(_query, query, suggestions, spelling, disambig);
 
                     if (isExactMatch && !onlyDidYouMean && !Brain.App.isLoadingApp()) {
-                        tipShownOnHelper = Brain.Tips.show(TIPS.FIRST_EXACT, {
-                            "query": query
+                        Brain.Tips.show(TIPS.FIRST_EXACT, {
+                            "query": query,
+                            "onFinish": function onFinish(tipShownOnHelper) {
+                                if (isExactMatch && !(spelling.length > 0 || disambig.length > 1) && !tipShownOnHelper) {
+                                    Evme.Helper.showTitle();
+                                }
+                            }
                         });
                     }
 
@@ -1679,10 +1730,6 @@ Evme.Brain = new function Evme_Brain() {
                         if (spelling.length > 0 || disambig.length > 1) {
                             Evme.Helper.hideTitle();
                             Evme.Helper.showSpelling();
-                        } else {
-                            if (!tipShownOnHelper) {
-                                Evme.Helper.showTitle();
-                            }
                         }
                     } else {
                         Evme.Helper.showSuggestions(_query);
@@ -1747,7 +1794,7 @@ Evme.Brain = new function Evme_Brain() {
                     "query": lastSearch.query
                 };
                 
-                new Evme.Tip(tip).show();
+                new Evme.Tip(tip);
             }
 
             Evme.Searchbar.endRequest();

@@ -20,6 +20,8 @@ requireApp('sms/test/unit/mock_moz_activity.js');
 requireApp('sms/test/unit/mock_contact.js');
 requireApp('sms/test/unit/mock_recipients.js');
 requireApp('sms/test/unit/mock_settings.js');
+requireApp('sms/test/unit/mock_activity_picker.js');
+requireApp('sms/test/unit/mock_action_menu.js');
 
 var mocksHelperForThreadUI = new MocksHelper([
   'Attachment',
@@ -27,7 +29,9 @@ var mocksHelperForThreadUI = new MocksHelper([
   'Settings',
   'Recipients',
   'LinkHelper',
-  'MozActivity'
+  'MozActivity',
+  'ActivityPicker',
+  'OptionMenu'
 ]);
 
 mocksHelperForThreadUI.init();
@@ -1331,6 +1335,57 @@ suite('thread_ui.js >', function() {
       assert.equal(call.data.type, 'video/ogg');
       assert.equal(call.data.filename, 'video.ogv');
       assert.equal(call.data.blob, testVideoBlob);
+    });
+  });
+
+  suite('Render Contact', function() {
+
+    test('Rendered Contact "givenName familyName"', function() {
+      var ul = document.createElement('ul');
+      var contact = new MockContact();
+      var html;
+
+      ThreadUI.renderContact(contact, 'foo', ul);
+      html = ul.firstElementChild.innerHTML;
+      assert.ok(html.contains('Pepito Grillo'));
+    });
+
+    test('Rendered Contact highlighted "givenName familyName"', function() {
+      var ul = document.createElement('ul');
+      var contact = new MockContact();
+      var html;
+
+      ThreadUI.renderContact(contact, 'Pepito Grillo', ul);
+      html = ul.firstElementChild.innerHTML;
+
+      assert.ok(
+        html.contains('<span class="highlight">Pepito</span>')
+      );
+      assert.ok(
+        html.contains('<span class="highlight">Grillo</span>')
+      );
+    });
+
+    test('Rendered Contact "type | number"', function() {
+      var ul = document.createElement('ul');
+      var contact = new MockContact();
+      var html;
+
+      ThreadUI.renderContact(contact, 'foo', ul);
+      html = ul.firstElementChild.innerHTML;
+      assert.ok(html.contains('Mobile | +346578888888'));
+    });
+
+    test('Rendered Contact highlighted "type | number"', function() {
+      var ul = document.createElement('ul');
+      var contact = new MockContact();
+      var html;
+
+      ThreadUI.renderContact(contact, '346578888888', ul);
+      html = ul.firstElementChild.innerHTML;
+      assert.ok(
+        html.contains('Mobile | +<span class="highlight">346578888888</span>')
+      );
     });
   });
 

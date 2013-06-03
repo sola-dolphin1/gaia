@@ -150,12 +150,10 @@ var ThreadUI = global.ThreadUI = {
      *
      * https://bugzilla.mozilla.org/show_bug.cgi?id=870069
      *
-
+     */
     this.headerText.addEventListener(
       'click', this.activateContact.bind(this)
     );
-
-     */
 
     // When 'focus' we have to remove 'edit-mode' in the recipient
     this.input.addEventListener(
@@ -1385,15 +1383,14 @@ var ThreadUI = global.ThreadUI = {
       var current = tels[i];
       var number = current.value;
       var title = details.title || number;
+      var type = current.type ? (current.type + ' |') : '';
 
       var contactLi = document.createElement('li');
       var data = {
         name: Utils.escapeHTML(title),
         number: Utils.escapeHTML(number),
-        type: current.type || '',
+        type: type,
         carrier: current.carrier || '',
-        srcAttr: details.photoURL ?
-          'src="' + Utils.escapeHTML(details.photoURL) + '"' : '',
         nameHTML: '',
         numberHTML: ''
       };
@@ -1411,18 +1408,9 @@ var ThreadUI = global.ThreadUI = {
       // Interpolate HTML template with data and inject.
       // Known "safe" HTML values will not be re-sanitized.
       contactLi.innerHTML = this.tmpl.contact.interpolate(data, {
-        safe: ['nameHTML', 'numberHTML', 'srcAttr']
+        safe: ['nameHTML', 'numberHTML']
       });
       contactsUl.appendChild(contactLi);
-
-      // Revoke contact photo after image onload.
-      var photo = contactLi.querySelector('img');
-      if (photo) {
-        photo.onload = photo.onerror = function revokePhotoURL() {
-          this.onload = this.onerror = null;
-          URL.revokeObjectURL(this.src);
-        };
-      }
     }
     return true;
   },
@@ -1494,7 +1482,17 @@ var ThreadUI = global.ThreadUI = {
 
   activateContact: function thui_activateContact() {
     var _ = navigator.mozL10n.get;
+    var participants = Threads.active && Threads.active.participants;
     var phoneNumber = this.headerText.dataset.phoneNumber;
+
+    // Do nothing when there are more then one participants
+    // in this thread.
+    // >1 requires the group participants view.
+    // See: https://bugzilla.mozilla.org/show_bug.cgi?id=870069
+    if (participants && participants.length > 1) {
+      return;
+    }
+
     // Call to 'option menu' or 'dialer' depending on existence of contact
     if (this.headerText.dataset.isContact == 'true') {
       ActivityPicker.call(phoneNumber);
