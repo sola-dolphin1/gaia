@@ -201,6 +201,9 @@ var MessageManager = {
     var threadMessages = document.getElementById('thread-messages');
     var recipient;
 
+    // Group Participants should never persist any hash changes
+    ThreadUI.groupView.reset();
+
     switch (window.location.hash) {
       case '#new':
 
@@ -237,12 +240,12 @@ var MessageManager = {
         });
         break;
       case '#thread-list':
+        ThreadUI.inThread = false;
+
         //Keep the  visible button the :last-child
-        var editButton = document.getElementById('icon-edit');
+        var editButton = document.getElementById('messages-edit-icon');
         editButton.parentNode.appendChild(editButton);
-        if (mainWrapper.classList.contains('edit')) {
-          mainWrapper.classList.remove('edit');
-        } else if (threadMessages.classList.contains('new')) {
+        if (threadMessages.classList.contains('new')) {
           MessageManager.slide('right', function() {
             threadMessages.classList.remove('new');
           });
@@ -260,10 +263,8 @@ var MessageManager = {
           });
         }
         break;
-      case '#edit':
-        ThreadListUI.cleanForm();
-        ThreadUI.cleanForm();
-        mainWrapper.classList.toggle('edit');
+      case '#group-view':
+        ThreadUI.groupView();
         break;
       default:
         var threadId = Threads.currentId;
@@ -291,13 +292,21 @@ var MessageManager = {
             // Update Header
             ThreadUI.updateHeaderData(function updateHeader() {
               MessageManager.slide('left', function slideEnd() {
-                ThreadUI.renderMessages(filter);
+                // hashchanges from #group-view back to #thread=n
+                // are considered "in thread" and should not
+                // trigger a complete re-rendering of the messages
+                // in the thread.
+                if (!ThreadUI.inThread) {
+                  ThreadUI.inThread = true;
+                  ThreadUI.renderMessages(filter);
+                }
               });
             });
           }
         }
       break;
     }
+
   },
 
   getThreads: function mm_getThreads(callback, extraArg) {

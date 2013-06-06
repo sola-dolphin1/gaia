@@ -13,11 +13,9 @@ Evme.Brain = new function Evme_Brain() {
         NUMBER_OF_APPS_TO_LOAD_IN_FOLDER = 16,
         NUMBER_OF_APPS_TO_LOAD = "FROM CONFIG",
         TIME_BEFORE_INVOKING_HASH_CHANGE = 200,
-        TIMEOUT_BEFORE_ALLOWING_DIALOG_REMOVE = "FROM CONFIG",
         MINIMUM_LETTERS_TO_SEARCH = 2,
         SEARCH_SOURCES = {},
         PAGEVIEW_SOURCES = {},
-        TIPS = {},
         ICON_SIZE = null,
 
         TIMEOUT_BEFORE_REQUESTING_APPS_AGAIN = 500,
@@ -69,9 +67,6 @@ Evme.Brain = new function Evme_Brain() {
 
         _config = options;
 
-        // Tips
-        TIPS = _config.tips;
-        TIMEOUT_BEFORE_ALLOWING_DIALOG_REMOVE = _config.timeBeforeAllowingDialogsRemoval;
         NUMBER_OF_APPS_TO_LOAD = _config.numberOfAppsToLoad || DEFAULT_NUMBER_OF_APPS_TO_LOAD;
         NUMBER_OF_APPS_TO_LOAD_IN_FOLDER = _config.numberOfAppsToLoad || NUMBER_OF_APPS_TO_LOAD_IN_FOLDER;
 
@@ -143,7 +138,6 @@ Evme.Brain = new function Evme_Brain() {
     this.Searchbar = new function Searchbar() {
         var self = this,
             timeoutBlur = null,
-            tipKeyboard = null,
             TIMEOUT_BEFORE_RUNNING_BLUR = 50;
 
         // Searchbar focused. Keyboard shows
@@ -157,10 +151,6 @@ Evme.Brain = new function Evme_Brain() {
             } else {
                 Brain.Helper.showDefault();
             }
-
-            if (!tipKeyboard) {
-                tipKeyboard = new Evme.Tip(TIPS.SEARCHBAR_FOCUS);
-            }
         };
 
         // Searchbar blurred. Keyboard hides.
@@ -170,9 +160,6 @@ Evme.Brain = new function Evme_Brain() {
                 data.e.stopPropagation();
             }
 
-            if (Brain.Dialog.isActive()) {
-                return;
-            }
 
             var didClickApp = false,
                 elClicked = data && data.e && data.e.explicitOriginalTarget;
@@ -184,8 +171,6 @@ Evme.Brain = new function Evme_Brain() {
                     }
                 }
             }
-
-            window.setTimeout(self.hideKeyboardTip, 500);
 
             Evme.Utils.setKeyboardVisibility(false);
             self.setEmptyClass();
@@ -231,11 +216,6 @@ Evme.Brain = new function Evme_Brain() {
 
         // Keyboard action key ("search") pressed
         this.returnPressed = function returnPressed(data) {
-            if (Brain.Dialog.isActive()) {
-                data && data.e && data.e.preventDefault();
-                return;
-            }
-
             var query = Evme.Searchbar.getValue();
             Searcher.searchExactFromOutside(query, SEARCH_SOURCES.RETURN_KEY);
             Evme.Searchbar.blur();
@@ -265,8 +245,6 @@ Evme.Brain = new function Evme_Brain() {
 
         // searchbar value changed
         this.valueChanged = function valueChanged(data) {
-            self.hideKeyboardTip();
-
             if (data.value) {
                 Searcher.searchAsYouType(data.value, SEARCH_SOURCES.TYPING);
             }
@@ -293,14 +271,6 @@ Evme.Brain = new function Evme_Brain() {
 
             if (typedQuery === suggestionsQuery) {
                 Searcher.searchExactAsYouType(firstSuggestion, typedQuery);
-            }
-        };
-
-        // hide keyboard tip
-        this.hideKeyboardTip = function hideKeyboardTip() {
-            if (tipKeyboard) {
-                tipKeyboard.hide();
-                tipKeyboard = null;
             }
         };
     };
@@ -519,6 +489,116 @@ Evme.Brain = new function Evme_Brain() {
             }
             Evme.Utils.log('{' + s.join('},{') + '}');
         };
+    };
+
+    // modules/Tasker/
+    this.Tasker = new function Tasker() {
+      var self = this;
+      
+      this.TASK_UPDATE_SHORTCUT_ICONS = "updateShortcutIcons";
+
+      // module init
+      this.init = function init() {
+        Evme.Tasker.add({
+          "id": self.TASK_UPDATE_SHORTCUT_ICONS
+        });
+      };
+
+      // when a new task is added to the queue
+      this.taskAdded = function taskAdded(data) {
+        
+      };
+
+      // process the queue
+      this.trigger = function trigger(data) {
+        var tasks = data.tasks;
+
+        for (var id in tasks) {
+          if (self['callback_' + id]) {
+            self['callback_' + id](tasks[id])
+          } else {
+            Evme.Utils.log('Error: No handler for task [' + id + ']');
+          }
+        }
+      };
+
+      this['callback_' + this.TASK_UPDATE_SHORTCUT_ICONS] = function updateShortcutIcons(taskData) {
+        if (Evme.Brain.ShortcutsCustomize.isOpen()) {
+          return false;
+        }
+        
+        Evme.DoATAPI.Shortcuts.get(null, function onSuccess(data){
+          var appsKey = [],
+              currentShortcuts = data && data.response && data.response.shortcuts || [],
+              shortcutsToSend = {};
+  
+          for (var i=0, shortcut, query; shortcut=currentShortcuts[i++];) {
+              query = shortcut.query;
+  
+              if (shortcut.experienceId && !query) {
+                  query = Evme.Utils.l10n('shortcut', 'id-' + Evme.Utils.shortcutIdToKey(shortcut.experienceId));
+              }
+              
+              if (query) {
+                  shortcutsToSend[query.toLowerCase()] = shortcut.experienceId;
+              }
+              
+              // the appsKey will be used later on to determine change
+              appsKey = appsKey.concat(shortcut.appIds);
+          }
+          
+          // re-request all the user's shortcuts to upadte them from the API
+          // otherwise the shortcut icons will remain static and will never change, even if
+          // the apps inside them have
+          Evme.DoATAPI.shortcutsGet({
+            "queries": JSON.stringify(Object.keys(shortcutsToSend)),
+            "_NOCACHE": true
+          }, function onShortcutsGet(response) {
+            var shortcuts = response.response.shortcuts,
+                icons = response.response.icons,
+                newAppsKey = [];
+            
+            if (!shortcuts || !icons) {
+              return;
+            }
+            
+            // create a key from the new shortcuts' icons to determine change
+            for (var i=0,shortcut; shortcut=shortcuts[i++];) {
+              newAppsKey = newAppsKey.concat(shortcut.appIds);
+            }
+            
+            // if the icons haven't changed- no need to update everything and cause a UI refresh
+            if (appsKey.join(',') === newAppsKey.join(',')) {
+              Evme.Utils.log('Shortcuts keys are the same- no need to refresh')
+              return;
+            }
+
+            // experience is more "important" than the query, so if we got it
+            // we reomve the query
+            for (var i=0,shortcut; shortcut=shortcuts[i++];) {
+              if (!shortcut.experienceId) {
+                shortcut.experienceId = shortcutsToSend[shortcut.query];
+              }
+              if (shortcut.experienceId) {
+                delete shortcut.query;
+              }
+            }
+
+            Evme.Utils.log('Updating shortcuts: ' + JSON.stringify(shortcuts));
+            
+            Evme.DoATAPI.Shortcuts.clear(function onShortcuteCleared(){
+              Evme.DoATAPI.Shortcuts.add({
+                  "shortcuts": shortcuts,
+                  "icons": icons
+              }, function onSuccess(){
+                  Brain.Shortcuts.loadFromAPI();
+              });
+            });
+          });
+          
+          return true;
+        });
+      };
     };
 
     // modules/Apps/
@@ -1062,12 +1142,13 @@ Evme.Brain = new function Evme_Brain() {
               icons = {},
               numberOfIconsInShortcut = (Evme.Utils.getIconGroup() || []).length;
               
+          shortcutsToUpdate[key] = [];
           for (var i=0,app; i<numberOfIconsInShortcut; i++) {
             app = apps[i];
             icons[app.id] = app.icon;
+            shortcutsToUpdate[key].push(app.id);
           }
-          shortcutsToUpdate[key] = Object.keys(icons);
-          
+
           Evme.DoATAPI.Shortcuts.update({
             "shortcuts": shortcutsToUpdate,
             "icons": icons
@@ -1097,12 +1178,6 @@ Evme.Brain = new function Evme_Brain() {
 
         // show
         this.show = function show() {
-            new Evme.Tip(TIPS.APP_EXPLAIN, function onShow(tip) {
-                elContainer.addEventListener("touchstart", tip.hide);
-            });
-
-            Brain.Searchbar.hideKeyboardTip();
-
             self.loadFromAPI();
         };
 
@@ -1174,6 +1249,8 @@ Evme.Brain = new function Evme_Brain() {
 
         // item remove
         this.remove = function remove(data) {
+            Evme.Utils.log('Remove shortcut: ' + JSON.stringify(data));
+
             Evme.Shortcuts.remove(data.shortcut);
             Evme.DoATAPI.Shortcuts.remove(data.data);
         };
@@ -1221,10 +1298,12 @@ Evme.Brain = new function Evme_Brain() {
         // done button clicked
         this.done = function done(data) {
             if (data.shortcuts && data.shortcuts.length > 0) {
+                Evme.Utils.log('Adding shortcuts: ' + data.shortcuts);
                 Evme.DoATAPI.Shortcuts.add({
                     "shortcuts": data.shortcuts,
                     "icons": data.icons
                 }, function onSuccess(){
+                    Evme.Utils.log('Done, let\s refresh the UI');
                     Brain.Shortcuts.loadFromAPI();
                 });
             }
@@ -1250,8 +1329,8 @@ Evme.Brain = new function Evme_Brain() {
     
                 // load user/default shortcuts from API
                 Evme.DoATAPI.Shortcuts.get(null, function onSuccess(data){
-                    var loadedResponse = data.response,
-                        currentIcons = loadedResponse.icons,
+                    var loadedResponse = data.response || {},
+                        currentIcons = loadedResponse.icons || {},
                         arrCurrentShortcuts = [],
                         shortcutsToSelect = {};
     
@@ -1328,100 +1407,6 @@ Evme.Brain = new function Evme_Brain() {
         };
     };
 
-    // modules/Dialog/
-    this.Dialog = new function Dialog() {
-        var active = null;
-
-        // show
-        this.show = function show(data) {
-            active = data.obj;
-        };
-
-        // hide
-        this.remove = function remove(data) {
-            active = null;
-        };
-
-        // background modal clicked
-        this.blackoutClick = function blackoutClick() {
-            if (Evme.Utils.isKeyboardVisible) {
-                Evme.Searchbar.focus();
-                self.Evme.Searchbar.cancelBlur();
-            }
-        };
-
-        this.getActive = function getActive() {
-            return active;
-        };
-
-        this.isActive = function isActive() {
-            return (active !== null && !Brain.Tips.isVisible());
-        };
-    };
-
-    // modules/Tip/
-    this.Tips = new function Tips() {
-        var self = this,
-            activeTip = null,
-            timeoutShowTip = null;
-
-        // show
-        this.show = function show(tip, options) {
-            !options && (options = {});
-
-            if (activeTip) {
-                return null;
-            }
-
-            var shouldSendCallback = true;
-
-            if (options.query) {
-                for (var tipId in TIPS.HELPER) {
-                    if (tipId == options.query.toUpperCase()) {
-                        var helperTip = TIPS.HELPER[tipId];
-
-                        shouldSendCallback = false;
-
-                        self.timesShown(helperTip, function timesShown(numberOfTimesShown) {
-                            helperTip.timesShown = numberOfTimesShown || 0;
-
-                            if (helperTip.timesShown < helperTip.timesToShow) {
-                                showHelperTip(helperTip, options);
-                                options.onFinish && options.onFinish(true);
-                            } else {
-                                options.onFinish && options.onFinish(false);
-                            }
-                        });
-                        break;
-                    }
-                }
-            }
-
-            if (shouldSendCallback) {
-                options.onFinish && options.onFinish(false);
-            }
-        };
-
-        function showHelperTip(tip, options) {
-            Evme.Helper.hideTitle();
-            Evme.Helper.flash();
-            self.markAsShown(tip);
-        }
-
-        this.markAsShown = function markAsShown(tip) {
-            tip.timesShown++;
-            Evme.Storage.set(tip.id, tip.timesShown);
-        };
-
-        this.timesShown = function timesShown(tip, callback) {
-            Evme.Storage.get(tip.id, callback);
-        };
-
-        this.isVisible = function isVisible() {
-            return activeTip;
-        };
-    };
-
     // helpers/Utils.Connection
     this.Connection = new function Connection() {
         // upon becoming online
@@ -1465,6 +1450,8 @@ Evme.Brain = new function Evme_Brain() {
             // TODO in the future, we might want to refresh results
             // to reflect accurate location.
             // but for now only the next request will use the location
+
+            Evme.Tasker.trigger(true);
         };
         
         // construct a valid API url- for debugging purposes
@@ -1489,7 +1476,6 @@ Evme.Brain = new function Evme_Brain() {
             hasMoreApps = false,
             iconsCachedFromLastRequest = [],
             autocompleteCache = {},
-            timeoutShowExactTip = null,
 
             requestSearch = null,
             requestImage = null,
@@ -1702,8 +1688,6 @@ Evme.Brain = new function Evme_Brain() {
                 isMore = (appsCurrentOffset > 0),
                 bSameQuery = (lastSearch.query === query);
             
-            var tipShownOnHelper = false;
-            
             // searching after a timeout while user it typing
             if (onlyDidYouMean || options.automaticSearch) {
                 // show only spelling or disambiguation, and only if the query is the same as what the user typed
@@ -1715,17 +1699,6 @@ Evme.Brain = new function Evme_Brain() {
             } else {
                 if (!isMore && !reloadingIcons) {
                     Evme.Helper.load(_query, query, suggestions, spelling, disambig);
-
-                    if (isExactMatch && !onlyDidYouMean && !Brain.App.isLoadingApp()) {
-                        Brain.Tips.show(TIPS.FIRST_EXACT, {
-                            "query": query,
-                            "onFinish": function onFinish(tipShownOnHelper) {
-                                if (isExactMatch && !(spelling.length > 0 || disambig.length > 1) && !tipShownOnHelper) {
-                                    Evme.Helper.showTitle();
-                                }
-                            }
-                        });
-                    }
 
                     if (isExactMatch) {
                         if (spelling.length > 0 || disambig.length > 1) {
@@ -1783,19 +1756,6 @@ Evme.Brain = new function Evme_Brain() {
                         Evme.Apps.getElement().classList.remove("has-more");
                     }
                 }
-            }
-
-            if (isExactMatch) {
-                var tip = TIPS.EXACT_RESULTS;
-                if (data.response.queryType == QUERY_TYPES.EXPERIENCE && TIPS.EXACT_RESULTS_SHORTCUT) {
-                    tip = TIPS.EXACT_RESULTS_SHORTCUT;
-                }
-                
-                tip._data = {
-                    "query": lastSearch.query
-                };
-                
-                new Evme.Tip(tip);
             }
 
             Evme.Searchbar.endRequest();

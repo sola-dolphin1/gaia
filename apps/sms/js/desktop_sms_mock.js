@@ -181,6 +181,10 @@
     });
   });
 
+  var participants = [
+    '101', '102', '103', '104', '105', '106', '107', '108', '109'
+  ];
+
   // Fake in-memory message database
   var messagesDb = {
     id: 0,
@@ -221,7 +225,8 @@
         read: true,
         receiver: '197746797',
         body: 'This message is intended to demonstrate hyperlink creation: ' +
-          'http://mozilla.org and https://bugzilla.mozilla.org/',
+        'http://mozilla.org or https://bugzilla.mozilla.org:8080' +
+        ' or\ngoogle.com or www.google.es',
         error: true,
         type: 'sms',
         timestamp: new Date(Date.now() - 900000)
@@ -391,6 +396,13 @@
         lastMessageType: 'mms',
         timestamp: new Date(Date.now() - 150000),
         unreadCount: 0
+      },
+      {
+        id: 9,
+        participants: participants,
+        lastMessageType: 'mms',
+        timestamp: new Date(now),
+        unreadCount: 0
       }
     ]
   };
@@ -440,7 +452,31 @@
     first -= 60000;
   }
 
+  first = 60000 * 40; // 1 minute * 50 Minutes
 
+  for (var i = 0; i < 40; i++) {
+    var sender = participants[Math.floor(Math.random() * 9)];
+    var receivers = participants.filter(function(val) {
+      return val !== sender;
+    });
+    messagesDb.messages.push({
+      threadId: 9,
+      sender: sender,
+      receivers: receivers,
+      delivery: 'received',
+      id: messagesDb.id++,
+      read: true,
+      type: 'mms',
+      subject: '',
+      smil: '<smil><body><par><text src="text1"/></par></body></smil>',
+      attachments: [{
+        location: 'text1',
+        content: new Blob(['hi! this is ' + sender], { type: 'text/plain' })
+      }],
+      timestamp: new Date(now - first)
+    });
+    first -= 60000;
+  }
 
 
 
