@@ -10,20 +10,11 @@ function thui_mmsAttachmentClick(target) {
   if (!attachment) {
     return false;
   }
-  var activity = new MozActivity({
-    name: 'open',
-    data: {
-      allowSave: true,
-      blob: attachment.blob,
-      filename: attachment.name,
-      type: attachment.blob.type
-    }
+
+  attachment.view({
+    allowSave: true
   });
-  activity.onerror = function() {
-    console.error('error with open activity', this.error.name);
-    // TODO: Add an alert here with a string saying something like
-    // "There is no application available to open this file type"
-  };
+
   return true;
 }
 
@@ -162,9 +153,39 @@ var ThreadUI = global.ThreadUI = {
       'click', this.onParticipantClick.bind(this)
     );
 
-    // When 'focus' we have to remove 'edit-mode' in the recipient
+
+    // Assimilations
+    // -------------------------------------------------
+    // If the user manually types a recipient number
+    // into the recipients list and does not "accept" it
+    // via <ENTER> or ";", but proceeds to either
+    // the message or attachment options, attempt to
+    // gather those stranded recipients and assimilate them.
+    //
+    // Previously, an approach using the "blur" event on
+    // the Recipients' "messages-to-field" element was used,
+    // however the to-field will frequently lose "focus"
+    // to any of its recipient children. If we assimilate on
+    // to-field blur, the result is entirely unusable:
+    //
+    //  1. Focus will jump from the recipient input to the
+    //      message input
+    //  2. 1 or 2 characters may remain in the recipient
+    //      editable, which will be "assimilated"
+    //  3. If a user has made it past 1 & 2, any attempts to
+    //      select a contact from contact search results
+    //      will also jump focus to the message input field
+    //
+    //  Currently, there are 3 Assimilations.
+    //
+
+    // Assimilation 1
     this.input.addEventListener(
-      'focus', this.messageComposerFocusHandler.bind(this)
+      'focus', this.assimilateRecipients.bind(this)
+    );
+    // Assimilation 2
+    this.attachButton.addEventListener(
+      'click', this.assimilateRecipients.bind(this)
     );
 
     this.container.addEventListener(
@@ -306,7 +327,7 @@ var ThreadUI = global.ThreadUI = {
     this.enableSend();
   },
 
-  messageComposerFocusHandler: function thui_messageInputHandler(event) {
+  assimilateRecipients: function thui_assimilateRecipients() {
     var node = this.recipientsList.lastChild;
     var typed;
 
@@ -345,6 +366,8 @@ var ThreadUI = global.ThreadUI = {
         return event.preventDefault();
       }
     }
+
+    this.updateCounter();
 
     var message = navigator.mozL10n.get('converted-to-' + Compose.type);
     this.convertNotice.querySelector('p').textContent = message;
@@ -495,15 +518,16 @@ var ThreadUI = global.ThreadUI = {
 
     // should disable if we have no message input
     var disableSendMessage = Compose.isEmpty();
-
     var messageNotLong = this.updateCounter();
+    var hasRecipients = this.recipients &&
+      (this.recipients.length || !!this.recipients.inputValue);
 
     // should disable if the message is too long
     disableSendMessage = disableSendMessage || !messageNotLong;
 
     // should disable if we have no recipients in the "new thread" view
     disableSendMessage = disableSendMessage ||
-      (window.location.hash == '#new' && !this.recipients.length);
+      (window.location.hash == '#new' && !hasRecipients);
 
     this.sendButton.disabled = disableSendMessage;
   },
@@ -831,36 +855,23 @@ var ThreadUI = global.ThreadUI = {
 
   createMmsContent: function thui_createMmsContent(dataArray) {
     var container = document.createDocumentFragment();
-    dataArray.forEach(function(attachment) {
+    dataArray.forEach(function(messageData) {
       var mediaElement, textElement;
 
-      if (attachment.name && attachment.blob) {
-        var type = Utils.typeFromMimeType(attachment.blob.type);
-        if (type) {
-          // we special case audio to display an image of an audio attachment
-          // video currently falls through this path too, we should revisit this
-          // with #869244
-          if (type === 'audio' || type === 'video') {
-            mediaElement = document.createElement('div');
-            mediaElement.className = type + '-placeholder';
-          } else {
-            mediaElement = document.createElement(type);
-            mediaElement.src = URL.createObjectURL(attachment.blob);
-            mediaElement.onload = function() {
-              URL.revokeObjectURL(this.src);
-            };
-          }
-          mediaElement.classList.add('mms-media');
-          container.appendChild(mediaElement);
-          attachmentMap.set(mediaElement, attachment);
-        }
+      if (messageData.blob) {
+        var attachment = new Attachment(messageData.blob, {
+          name: messageData.name
+        });
+        var mediaElement = attachment.render();
+        container.appendChild(mediaElement);
+        attachmentMap.set(mediaElement, attachment);
       }
 
-      if (attachment.text) {
+      if (messageData.text) {
         textElement = document.createElement('span');
 
         // escape text for html and look for clickable numbers, etc.
-        var text = Utils.escapeHTML(attachment.text);
+        var text = Utils.escapeHTML(messageData.text);
         text = LinkHelper.searchAndLinkClickableData(text);
 
         textElement.innerHTML = text;
@@ -1177,6 +1188,8 @@ var ThreadUI = global.ThreadUI = {
         elems.bubble = currentNode;
       } else if (currentNode.classList.contains('message')) {
         elems.message = currentNode;
+      } else if (currentNode.classList.contains('pack-end')) {
+        elems.packEnd = currentNode;
       }
       currentNode = currentNode.parentNode;
     }
@@ -1199,9 +1212,9 @@ var ThreadUI = global.ThreadUI = {
       return;
     }
 
-    // Click events originating from within a "bubble" of an error message
+    // Click events originating from a "pack-end" aside of an error message
     // should trigger a prompt for retransmission.
-    if (elems.message.classList.contains('error')) {
+    if (elems.message.classList.contains('error') && elems.packEnd) {
       if (window.confirm(_('resend-confirmation'))) {
         this.resendMessage(elems.message.dataset.messageId);
       }
@@ -1272,6 +1285,12 @@ var ThreadUI = global.ThreadUI = {
     if (Compose.isEmpty()) {
       return;
     }
+
+    // Assimilation 3 (see "Assimilations" above)
+    // User may return to recipients, type a new recipient
+    // manually and then click the sendButton without "accepting"
+    // the recipient.
+    this.assimilateRecipients();
 
     // not sure why this happens - replace me if you know
     this.container.classList.remove('hide');
@@ -1559,6 +1578,8 @@ var ThreadUI = global.ThreadUI = {
       typed = event.target.textContent.trim();
       this.searchContact(typed);
     }
+
+    this.enableSend();
   },
 
   searchContact: function thui_searchContact(filterValue) {
