@@ -335,10 +335,10 @@ suiteGroup('Views.ModifyEvent', function() {
             startDate: busytimeRecurring.startDate,
             endDate: busytimeRecurring.endDate
           };
-          assert.hasProperties(
-            subject.formData(),
-            expected
-          );
+
+          var actual = subject.formData();
+          actual.calendarId = parseInt(actual.calendarId, 10);
+          assert.hasProperties(actual, expected);
         });
       });
     });
@@ -1049,12 +1049,14 @@ suiteGroup('Views.ModifyEvent', function() {
       test('initial', function() {
         check(true);
         assert.ok(list.contains(subject.ALLDAY), 'has allday');
+        assert.isTrue(subject.event.isAllDay, 'model is allday');
       });
 
       test('uncheck', function() {
         check(true);
         check(false);
         assert.ok(!list.contains(subject.ALLDAY), 'has allday');
+        assert.isFalse(subject.event.isAllDay, 'model is allday');
       });
 
       test('when start & end are same dates (all day)', function() {
