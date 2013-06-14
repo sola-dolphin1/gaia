@@ -5,6 +5,12 @@
 
 var LockScreen = {
   /*
+  * Boot to JCROM
+  */
+  enableTheme: false,
+  themeName: "",
+
+  /*
   * Boolean return true when initialized.
   */
   ready: false,
@@ -186,8 +192,8 @@ var LockScreen = {
       self.updateConnState();
     });
 
-    SettingsListener.observe('wallpaper.image',
-                             'resources/images/backgrounds/default.png',
+    SettingsListener.observe('',
+                             '',
                              function(value) {
                                self.updateBackground(value);
                                self.overlay.classList.remove('uninit');
@@ -212,6 +218,54 @@ var LockScreen = {
       0, function(value) {
       self.passCodeRequestTimeout = value;
     });
+  },
+
+  /* JCROM */
+  changeThemeWallpaper: function ns_changeThemeWallpaper() {
+    if(this.enableTheme) {
+      var storage = navigator.getDeviceStorage('sdcard');
+      var req = storage.get("mytheme/" + LockScreen.themeName + "/wallpaper.png");
+      req.onsuccess = function(e){
+        var fl = e.target.result;
+        var reader = new FileReader();
+        reader.readAsDataURL(fl);
+        reader.onload = function(ev) {
+          var request = navigator.mozSettings.createLock().set({
+            'wallpaper.image': ev.target.result
+          });
+        }
+      }
+      req.onerror = function(e){
+        var request = navigator.mozSettings.createLock().set({
+          'wallpaper.image': ""
+        });
+      }
+    } else {
+        var request = navigator.mozSettings.createLock().set({
+          'wallpaper.image': ""
+        });
+    }
+  },
+
+  changeThemeLockscreen: function ns_changeThemeLockscreen() {
+    var self = this;
+    if(this.enableTheme) {
+      var storage = navigator.getDeviceStorage('sdcard');
+      var req = storage.get("mytheme/" + LockScreen.themeName + "/lockscreen.png");
+      req.onsuccess = function(e){
+        var fl = e.target.result;
+        var reader = new FileReader();
+        reader.readAsDataURL(fl);
+        reader.onload = function(ev) {
+          self.updateBackground(ev.target.result);
+        }
+      }
+      req.onerror = function(){
+        self.updateBackground(null);
+      }
+    } else {
+      self.updateBackground(null);
+    }
   },
 
   /*
@@ -1050,6 +1104,18 @@ var LockScreen = {
 // Bug 836195 - [Homescreen] Dock icons drop down in the UI
 // consistently when using a lockcode and visiting camera
 LockScreen.init();
+
+SettingsListener.observe('jcrom.theme.enabled', false, function(value) {
+  LockScreen.enableTheme = value;
+  LockScreen.changeThemeWallpaper();
+  LockScreen.changeThemeLockscreen();
+});
+
+SettingsListener.observe('theme.select', "", function(value) {
+  LockScreen.themeName = value;
+  LockScreen.changeThemeWallpaper();
+  LockScreen.changeThemeLockscreen();
+});
 
 navigator.mozL10n.ready(LockScreen.init.bind(LockScreen));
 
