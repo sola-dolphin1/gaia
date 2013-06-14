@@ -693,6 +693,27 @@ window.addEventListener('load', function loadSettings() {
       case 'battery':             // full battery status
         Battery.update();
         break;
+      case 'jcromSettings':
+        var themeList = document.querySelector('select[name="theme.select"]');
+        themeList.innerHTML = '';
+        var option = document.createElement('option');
+        option.value = "Select Theme";
+        option.appendChild(document.createTextNode('Select Theme'));
+        themeList.appendChild(option);
+        var storage = navigator.getDeviceStorage('sdcard');
+        var req = storage.enumerate("mytheme");
+        req.onsuccess = function(e) {
+          var info = e.target.result;
+          var arr = info.name.split("/");
+          if(arr[arr.length-1] == ".themeinfo") {
+            var option = document.createElement('option');
+            option.value = arr[arr.length-2];
+            option.appendChild(document.createTextNode(arr[arr.length-2]));
+            themeList.appendChild(option);
+          }
+          e.target.continue();
+        };
+        break;
     }
 
     // preset all inputs in the panel and subpanels.

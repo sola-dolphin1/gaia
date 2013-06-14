@@ -28,6 +28,10 @@
   background-image: url(images/icons_sprite_active.gif);
 }
 
+#menuItem-jcromSettings::before {
+  background-position: -60px -150px;
+}
+
 #menuItem-airplaneMode::before {
   background-position: 0 0;
 }
