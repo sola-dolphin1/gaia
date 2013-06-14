@@ -167,6 +167,12 @@ var StatusBar = {
   systemDownloadsAnimation: null,
 
   /**
+   * JCROM
+   */
+  enableTheme: false,
+  themeName: "",
+
+  /**
    * Object used for handling the clock UI element, wraps all related timers
    */
   clock: new Clock(),
@@ -266,6 +272,29 @@ var StatusBar = {
       'style/statusbar/images/system-downloads-flat.png', 8, 130);
 
     this.setActive(true);
+  },
+
+  changeThemeStatusbar: function ns_changeThemeStatusbar() {
+    if(this.enableTheme) {
+      var storage = navigator.getDeviceStorage('sdcard');
+      var req = storage.get("mytheme/" + StatusBar.themeName + "/statusbar.png");
+      req.onsuccess = function(e){
+        var fl = e.target.result;
+        var reader = new FileReader();
+        reader.readAsDataURL(fl);
+        reader.onload = function(ev) {
+          var element = document.getElementById('statusbar'); 
+          element.style.backgroundImage = 'url(' + ev.target.result + ')';
+        }
+      }
+      req.onerror = function(e){
+        var element = document.getElementById('statusbar'); 
+        element.style.backgroundImage = null;
+      }
+    } else {
+      var element = document.getElementById('statusbar'); 
+      element.style.backgroundImage = null;
+    }
   },
 
   handleEvent: function sb_handleEvent(evt) {
@@ -838,4 +867,13 @@ if (navigator.mozL10n.readyState == 'complete' ||
   window.addEventListener('localized', StatusBar.init.bind(StatusBar));
 }
 
+SettingsListener.observe('jcrom.theme.enabled', false, function(value) {
+  StatusBar.enableTheme = value;
+  StatusBar.changeThemeStatusbar();
+});
+
+SettingsListener.observe('theme.select', "", function(value) {
+  StatusBar.themeName = value;
+  StatusBar.changeThemeStatusbar();
+});
 
