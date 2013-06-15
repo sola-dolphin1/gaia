@@ -51,6 +51,8 @@ var NotificationScreen = {
   lockscreenPreview: true,
   silent: false,
   vibrates: true,
+  enableTheme: false,
+  themeName: "",
 
   init: function ns_init() {
     window.addEventListener('mozChromeEvent', this);
@@ -391,6 +393,29 @@ var NotificationScreen = {
       this.externalNotificationsCount = 0;
     }
     this.updateStatusBarIcon();
+  },
+
+  changeThemeNotification: function ns_changeThemeNotification() {
+    if(this.enableTheme) {
+      var storage = navigator.getDeviceStorage('sdcard');
+      var req = storage.get("mytheme/" + NotificationScreen.themeName + "/notification.png");
+      req.onsuccess = function(e){
+        var fl = e.target.result;
+        var reader = new FileReader();
+        reader.readAsDataURL(fl);
+        reader.onload = function(ev) {
+          var element = document.getElementById('notifications-container'); 
+          element.style.backgroundImage = 'url(' + ev.target.result + ')';
+        }
+      }
+      req.onerror = function(e){
+        var element = document.getElementById('notifications-container'); 
+        element.style.backgroundImage = null;
+      }
+    } else {
+      var element = document.getElementById('notifications-container'); 
+      element.style.backgroundImage = null;
+    }
   }
 
 };
@@ -401,6 +426,16 @@ SettingsListener.observe(
     'lockscreen.notifications-preview.enabled', true, function(value) {
 
   NotificationScreen.lockscreenPreview = value;
+});
+
+SettingsListener.observe('jcrom.theme.enabled', false, function(value) {
+  NotificationScreen.enableTheme = value;
+  NotificationScreen.changeThemeNotification();
+});
+
+SettingsListener.observe('theme.select', "", function(value) {
+  NotificationScreen.themeName = value;
+  NotificationScreen.changeThemeNotification();
 });
 
 SettingsListener.observe('audio.volume.notification', 7, function(value) {
