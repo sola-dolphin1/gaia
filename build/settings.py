@@ -9,6 +9,8 @@ import os
 import sys
 
 settings = {
+ "jcrom.theme.enabled": False,
+ "theme.select": "",
  "accessibility.invert": False,
  "accessibility.screenreader": False,
  "alarm.enabled": False,
