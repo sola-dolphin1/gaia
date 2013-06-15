@@ -86,6 +86,34 @@
       - to handle the panel transitions.
       -->
 
+    <!-- JCROM :: JCROM Settings -->
+    <section role="region" id="jcromSettings">
+      <!--
+      <header>
+        <a href="#root"><span class="icon icon-back">back</span></a>
+        <h1 data-l10n-id="jcromSettings"> JCROM Settings </h1>
+      </header>
+
+      <div>
+        <ul>
+          <li>
+            <label>
+              <input type="checkbox" name="jcrom.theme.enabled" />
+              <span></span>
+            </label>
+            <a data-l10n-id="jcrom-settings">Enable JCROM Theme</a>
+          </li>
+          <li>
+            <p class="fake-select">
+              <button class="icon icon-dialog">Select Theme</button>
+              <select name="theme.select"></select>
+            </p>
+          </li>
+        </ul>
+      </div>
+      -->
+    </section>
+
     <!-- Connectivity :: Wi-Fi :: Network Status -->
     <section role="region" id="wifi-status">
       <!--
@@ -2762,8 +2790,18 @@
         <h1 data-l10n-id="settings"> Settings </h1>
       </header>
 
-      <!-- Main :: Network & Connectivity -->
       <div>
+        <!-- Main :: JCROM -->
+        <header>
+          <h2 data-l10n-id="jcrom">JCROM</h2>
+        </header>
+        <ul>
+          <li>
+            <a id="menuItem-jcromSettings" class="menu-item" href="#jcromSettings" data-l10n-id="jcromSettings">JCROM Settings</a>
+          </li>
+        </ul>
+
+        <!-- Main :: Network & Connectivity -->
         <header>
           <h2 data-l10n-id="networkAndConnectivity">Network &amp; Connectivity</h2>
         </header>
