@@ -328,6 +328,17 @@ Gaia.webapps.forEach(function(webapp) {
       return;
     }
 
+    // Forces the file to pass as @2x
+    if ( HIDPI != 0 && file.path.search('@2x') == -1 ) {
+      var path2x = file.path.split('.')[0]+'@2x.'+file.path.split('.')[1];
+      var file2x = new FileUtils.File(path2x);
+      // Adds the suffix
+      if ( file2x.exists() ) {
+        var path = path.split('.')[0]+'@2x.'+path.split('.')[1];
+        var file = file2x;
+      }
+    }
+
     addToZip(zip, '/shared/resources/' + path, file);
 
     if (path === 'media/ringtones/' && Gaia.distributionDir &&
