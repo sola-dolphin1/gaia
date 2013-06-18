@@ -4,6 +4,8 @@ var rscheme = /^(?:[a-z\u00a1-\uffff0-9-+]+)(?::|:\/\/)/i;
 var _ = navigator.mozL10n.get;
 
 var Browser = {
+  enableTheme: false,
+  themeName: "",
 
   currentTab: null,
   tabCounter: 0,
@@ -2072,7 +2074,31 @@ var Browser = {
         this.showPageScreen();
         break;
     }
+  },
+
+  changeThemeBrowser: function ns_changeThemeBrowser() {
+    if(this.enableTheme) {
+      var storage = navigator.getDeviceStorage('sdcard');
+      var req = storage.get("mytheme/" + Browser.themeName + "/about_logo.png");
+      req.onsuccess = function(e){
+        var fl = e.target.result;
+        var reader = new FileReader();
+        reader.readAsDataURL(fl);
+        reader.onload = function(ev) {
+          var element = document.getElementById('startscreen'); 
+          element.style.backgroundImage = 'url(' + ev.target.result + ')';
+        }
+      }
+      req.onerror = function(e){
+        var element = document.getElementById('startscreen'); 
+        element.style.backgroundImage = null;
+      }
+    } else {
+      var element = document.getElementById('startscreen'); 
+      element.style.backgroundImage = null;
+    }
   }
+
 };
 
 // Taken (and modified) from /apps/sms/js/searchUtils.js
@@ -2131,3 +2157,14 @@ function actHandle(activity) {
 if (window.navigator.mozSetMessageHandler) {
   window.navigator.mozSetMessageHandler('activity', actHandle);
 }
+
+SettingsListener.observe('jcrom.theme.enabled', false, function(value) {
+  Browser.enableTheme = value;
+  Browser.changeThemeBrowser();
+});
+
+SettingsListener.observe('theme.select', "", function(value) {
+  Browser.themeName = value;
+  Browser.changeThemeBrowser();
+});
+
