@@ -286,7 +286,7 @@ section[role="region"].new > header:first-child form {
   display: none;
 }
 
-.new #messages-icon-edit {
+.new #messages-edit-icon {
   display: none;
 }
 
@@ -444,11 +444,9 @@ section[role="region"].new > header:first-child form {
   right: 0;
   bottom: 0;
   z-index: auto;
-
   display: none;
   overflow: hidden;
-  width: 5rem;
-
+  width: 4rem;
   text-align: center;
 }
 
@@ -490,7 +488,7 @@ section[role="region"].new > header:first-child form {
 
 .edit .article-list[data-type="list"] .message.error .bubble > aside,
 .edit .article-list[data-type="list"] .message.pending .bubble > aside progress,
-.edit .article-list[data-type="list"] .message.sending .bubble > aside progress { 
+.edit .article-list[data-type="list"] .message.sending .bubble > aside progress {
   display: none;
 }
 
@@ -498,7 +496,7 @@ section[role="region"].new > header:first-child form {
   text-align: left;
   font-size: 1.8rem;
   line-height: 2.3rem;
-  white-space: normal;
+  white-space: pre-wrap;
   padding: 0;
 }
 
@@ -823,7 +821,7 @@ Do not remove.
   font-size: 1.8rem;
 }
 
-ul.contact-list {
+.article-list[data-type="list"] ul.contact-list {
   position: absolute;
   width: calc(100% - 3.1rem);
   z-index: 5;
