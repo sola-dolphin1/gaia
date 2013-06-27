@@ -7,6 +7,7 @@
 navigator.mozL10n.ready(function carrierSettings() {
   var APN_FILE = '/shared/resources/apn.json';
   var _ = window.navigator.mozL10n.get;
+  var restartingDataConnection = false;
   const AUTH_TYPES = ['none', 'pap', 'chap', 'papOrChap'];
 
   /**
@@ -113,7 +114,7 @@ navigator.mozL10n.ready(function carrierSettings() {
           rilData(usage, 'mmsport').value = item.mmsport || '';
         }
         var input = document.getElementById('ril-' + usage + '-authType');
-        input.value = item.authtype ? AUTH_TYPES[input.value] : 'notDefined';
+        input.value = AUTH_TYPES[item.authtype] || 'notDefined';
         var parent = input.parentElement;
         var button = input.previousElementSibling;
         var index = input.selectedIndex;
@@ -223,9 +224,43 @@ navigator.mozL10n.ready(function carrierSettings() {
       storeCustomAPNSettingFields();
     };
 
+    /* XXX: This is a minimal and quick fix of bug 882059 for v1-train.
+     *      We should modify it after bug 842252 landed.
+     */
+    var apnSettingsChanged = false;
+    var apnRelatedInputs = Array.prototype.slice.call(
+      apnPanel.querySelectorAll('.apnSettings-list input[data-setting],' +
+                                '.apnSettings-advanced input[data-setting]'));
+    var onApnSettingsChanged = function() {
+      apnSettingsChanged = true;
+    };
+    apnRelatedInputs.forEach(function(input) {
+      var settingName = input.dataset.setting;
+      if (input.type === 'radio') {
+        input.addEventListener('change', onApnSettingsChanged);
+      } else {
+        input.addEventListener('input', onApnSettingsChanged);
+      }
+    });
+
+    function onSubmit() {
+      setTimeout(function() {
+        if (apnSettingsChanged) {
+          apnSettingsChanged = false;
+          restartDataConnection();
+        }
+      });
+    }
+
+    function onReset() {
+      apnSettingsChanged = false;
+    }
+
     // force data connection to restart if changes are validated
     var submitButton = apnPanel.querySelector('button[type=submit]');
-    submitButton.addEventListener('click', restartDataConnection);
+    var resetButton = apnPanel.querySelector('button[type=reset]');
+    submitButton.addEventListener('click', onSubmit);
+    resetButton.addEventListener('click', onReset);
   }
 
   // restart data connection by toggling it off and on again
@@ -234,6 +269,7 @@ navigator.mozL10n.ready(function carrierSettings() {
     if (!settings)
       return;
 
+    restartingDataConnection = true;
     var key = 'ril.data.enabled';
     function setDataState(state) {
       var cset = {};
@@ -246,6 +282,7 @@ navigator.mozL10n.ready(function carrierSettings() {
       if (request.result[key]) {
         setDataState(false);    // turn data off
         setTimeout(function() { // turn data back on
+          restartingDataConnection = false;
           setDataState(true);
         }, 2500); // restart data connection in 2.5s
       }
@@ -341,7 +378,7 @@ navigator.mozL10n.ready(function carrierSettings() {
       // Turn off data roaming automatically when users turn off data connection
       if (settings) {
         settings.addObserver('ril.data.enabled', function(event) {
-          if (!event.settingValue) {
+          if (!event.settingValue && !restartingDataConnection) {
             var cset = {};
             cset['ril.data.roaming_enabled'] = false;
             settings.createLock().set(cset);
@@ -393,8 +430,8 @@ navigator.mozL10n.ready(function carrierSettings() {
 
     // state
     var state = document.createElement('small');
-    state.textContent =
-      network.state ? _('state-' + network.state) : _('state-unknown');
+    localize(state,
+      network.state ? ('state-' + network.state) : 'state-unknown');
 
     // create list item
     var li = document.createElement('li');
@@ -406,7 +443,7 @@ navigator.mozL10n.ready(function carrierSettings() {
 
     // bind connection callback
     li.onclick = function() {
-      callback(network, state);
+      callback(network, true);
     };
     return li;
   }
@@ -420,8 +457,13 @@ navigator.mozL10n.ready(function carrierSettings() {
     var scanItem = list.querySelector('li[data-state="ready"]');
     scanItem.onclick = scan;
 
+    var currentConnectedNetwork = null;
+    var connecting = false;
+    var operatorItemMap = {};
+
     // clear the list
     function clear() {
+      operatorItemMap = {};
       var operatorItems = list.querySelectorAll('li:not([data-state])');
       var len = operatorItems.length;
       for (var i = len - 1; i >= 0; i--) {
@@ -447,21 +489,48 @@ navigator.mozL10n.ready(function carrierSettings() {
     }
 
     // select operator
-    function selectOperator(network, messageElement) {
+    function selectOperator(network, manuallySelect) {
+      if (connecting) {
+        return;
+      }
+
+      var listItem = operatorItemMap[network.mcc + '.' + network.mnc];
+      if (!listItem) {
+        return;
+      }
+
+      var messageElement = listItem.querySelector('small');
+
+      connecting = true;
       // update current network state as 'available' (the string display
       // on the network to connect)
-      resetOperatorItemState();
+      if (manuallySelect) {
+        resetOperatorItemState();
+      }
 
       var req = mobileConnection.selectNetwork(network);
       localize(messageElement, 'operator-status-connecting');
       req.onsuccess = function onsuccess() {
+        currentConnectedNetwork = network;
         localize(messageElement, 'operator-status-connected');
         updateSelectionMode(false);
+        connecting = false;
       };
-      req.onerror = function onsuccess() {
+      req.onerror = function onerror() {
+        connecting = false;
         localize(messageElement, 'operator-status-connectingfailed');
-        updateSelectionMode(false);
+        if (currentConnectedNetwork) {
+          recoverAvailableOperator();
+        } else {
+          updateSelectionMode(false);
+        }
       };
+    }
+
+    function recoverAvailableOperator() {
+      if (currentConnectedNetwork) {
+        selectOperator(currentConnectedNetwork, false);
+      }
     }
 
     // scan available operators
@@ -472,8 +541,14 @@ navigator.mozL10n.ready(function carrierSettings() {
       req.onsuccess = function onsuccess() {
         var networks = req.result;
         for (var i = 0; i < networks.length; i++) {
-          var listItem = newListItem(networks[i], selectOperator);
+          var network = networks[i];
+          var listItem = newListItem(network, selectOperator);
           list.insertBefore(listItem, scanItem);
+
+          operatorItemMap[network.mcc + '.' + network.mnc] = listItem;
+          if (network.state === 'current') {
+            currentConnectedNetwork = network;
+          }
         }
         list.dataset.state = 'ready'; // "Search Again" button
       };
