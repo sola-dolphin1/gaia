@@ -30,7 +30,7 @@ li:active:not(.disabled) .menu-item::before,
 }
 
 #menuItem-jcromSettings::before {
-  background-position: -60px -150px;
+  background-position: -90px -150px;
 }
 
 #menuItem-airplaneMode::before {
