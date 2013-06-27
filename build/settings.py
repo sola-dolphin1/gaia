@@ -58,8 +58,13 @@ settings = {
  "icc.inputTextTimeout": 40000,
  "keyboard.layouts.english": True,
  "keyboard.layouts.dvorak": False,
- "keyboard.layouts.otherlatins": False,
- "keyboard.layouts.cyrillic": False,
+ "keyboard.layouts.czech": False,
+ "keyboard.layouts.french": False,
+ "keyboard.layouts.german": False,
+ "keyboard.layouts.norwegian": False,
+ "keyboard.layouts.slovak": False,
+ "keyboard.layouts.turkish": False,
+ "keyboard.layouts.russian": False,
  "keyboard.layouts.arabic": False,
  "keyboard.layouts.hebrew": False,
  "keyboard.layouts.zhuyin": False,
@@ -181,6 +186,7 @@ def main():
     parser.add_option("-v", "--verbose", help="increase output verbosity", action="store_true")
     parser.add_option(      "--noftu", help="bypass the ftu app", action="store_true")
     parser.add_option(      "--locale", help="specify the default locale to use")
+    parser.add_option(      "--profile-folder", help="specify a profile directory")
     parser.add_option(      "--enable-debugger", help="enable remote debugger (and ADB for VARIANT=user builds)", action="store_true")
     (options, args) = parser.parse_args(sys.argv[1:])
 
@@ -196,10 +202,15 @@ def main():
     else:
         ftu_url = "app://communications.gaiamobile.org/manifest.webapp"
 
+    if options.profile_folder:
+        profile_folder = options.profile_folder
+    else:
+        profile_folder = "profile"
+
     if options.output:
         settings_filename = options.output
     else:
-        settings_filename = "profile/settings.json"
+        settings_filename = profile_folder + "/settings.json"
 
     if options.wallpaper and os.path.exists(options.wallpaper):
         wallpaper_filename = options.wallpaper
@@ -215,6 +226,7 @@ def main():
         print "Setting Filename:",settings_filename
         print "Wallpaper Filename:", wallpaper_filename
         print "Enable Debugger:", enable_debugger
+        print "Profile Folder:", profile_folder
 
     # Set the default console output
     if options.console:
