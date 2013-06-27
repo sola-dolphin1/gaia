@@ -379,7 +379,7 @@
           return 'notification';
       default:
         return homescreenVisible || LockScreen.locked ||
-          WindowManager.isFtuRunning() ? 'notification' : 'content';
+          FtuLauncher.isFtuRunning() ? 'notification' : 'content';
     }
   }
 
@@ -505,7 +505,8 @@
 
     var vibrationEnabledOld = vibrationEnabled;
     var volume = calculateVolume(currentVolume[channel], delta, channel);
-    muteState = getVibrationAndMuteState(currentVolume[channel], delta, channel);
+    muteState =
+      getVibrationAndMuteState(currentVolume[channel], delta, channel);
 
     // Silent mode entry point
     if (volume <= 0 && delta < 0 && channel == 'notification') {
