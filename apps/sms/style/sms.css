@@ -235,8 +235,9 @@ form[data-type="action"] img[src=""] {
   transform: translateY(0);
 }
 
+/* Completely hide the Compose form from view when in Edit mode */
 .edit .messages-compose-form {
-  transform: translateY(3.6rem);
+  transform: translateY(100%);
 }
 
 .edit form[role="dialog"][data-type="edit"] header {
@@ -614,7 +615,7 @@ form.bottom[role="search"].messages-compose-form {
   color: #888;
   position: absolute;
   top: 0.8rem;
-  content: attr(placeholder);
+  content: attr(data-placeholder);
   pointer-events: none;
 }
 
