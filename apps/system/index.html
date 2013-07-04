@@ -230,6 +230,7 @@
     <!-- Any module that wants to intercept the Home button and prevent the -->
     <!-- homescreen from being displayed must come before this script. -->
     <link rel="stylesheet" type="text/css" href="style/window.css">
+    <script defer src="js/orientation_observer.js"></script>
     <script defer src="js/window.js"></script>
     <script defer src="js/window_manager.js"></script>
 
@@ -349,8 +350,15 @@
         <div id="statusbar-call-forwarding" class="sb-icon sb-icon-call-forwarding" hidden></div>
 
         <!-- Activity -->
-        <canvas id="statusbar-system-downloads" width="16" height="16" hidden></canvas>
-        <canvas id="statusbar-network-activity" width="16" height="16" hidden></canvas>
+        <!-- HACK: We use images instead of divs to enforce allocation of a
+             dedicated layer just for this animated icons, remove after bug
+             717872 gets fixed -->
+        <img id="statusbar-system-downloads"
+             src="style/statusbar/images/system-downloads.gif"
+             class="sb-icon-system-downloads" hidden>
+        <img id="statusbar-network-activity"
+             src="style/statusbar/images/network-activity.gif"
+             class="sb-icon-network-activity" hidden>
       </div>
 
       <div id="utility-tray" data-z-index-level="utility-tray">
