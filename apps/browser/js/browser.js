@@ -246,7 +246,7 @@ var Browser = {
          this.screenSwipeMngr[evt].bind(this.screenSwipeMngr));
      }, this);
 
-     document.addEventListener('mozvisibilitychange',
+     document.addEventListener('visibilitychange',
        this.handleVisibilityChange.bind(this));
 
      ModalDialog.init();
@@ -613,7 +613,7 @@ var Browser = {
   handleCrashedTab: function browser_handleCrashedTab(tab) {
     // No need to show the crash screen for background tabs,
     // they will be revived when selected
-    if (tab.id === this.currentTab.id && !document.mozHidden) {
+    if (tab.id === this.currentTab.id && !document.hidden) {
       this.showCrashScreen();
     }
     tab.loading = false;
@@ -627,12 +627,12 @@ var Browser = {
   },
 
   handleVisibilityChange: function browser_handleVisibilityChange() {
-    if (!document.mozHidden && this.currentTab.crashed)
+    if (!document.hidden && this.currentTab.crashed)
       this.reviveCrashedTab(this.currentTab);
 
     // Bug 845661 - Attention screen does not appears when
     // the url bar input is focused.
-    if (document.mozHidden) {
+    if (document.hidden) {
       this.urlInput.blur();
       this.currentTab.dom.blur();
     }
@@ -938,9 +938,6 @@ var Browser = {
 
   urlFocus: function browser_urlFocus(e) {
     if (this.currentScreen === this.PAGE_SCREEN) {
-      // Hide modal dialog
-      ModalDialog.hide();
-      AuthenticationDialog.hide();
       this.urlInput.value = this.currentTab.url;
       this.sslIndicator.value = '';
       this.setUrlBar(this.currentTab.url);

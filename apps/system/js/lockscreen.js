@@ -196,6 +196,19 @@ var LockScreen = {
       self.updateConnState();
     });
 
+    SettingsListener.observe('accessibility.screenreader', false,
+                             function(value) {
+      self.screenReader = value;
+      if (value) {
+        self.overlay.classList.add('triggered');
+        self.overlay.classList.remove('elastic');
+        self.setElasticEnabled(false);
+      } else {
+        self.overlay.classList.remove('triggered');
+        self.setElasticEnabled(true);
+      }
+    });
+
     SettingsListener.observe('',
                              '',
                              function(value) {
@@ -336,7 +349,7 @@ var LockScreen = {
           this.clock.start(this.refreshClock.bind(this));
 
           // Show the unlock keypad immediately
-          if (this.passCodeEnabled) {
+          if (this.passCodeEnabled && this._passCodeTimeoutCheck) {
             this.switchPanel('passcode');
           }
         }
@@ -772,11 +785,8 @@ var LockScreen = {
             self.areaHandle.style.opacity =
             self.areaUnlock.style.opacity =
             self.areaCamera.style.opacity = '';
-          self.overlay.classList.remove('triggered');
-          self.areaHandle.classList.remove('triggered');
-          self.areaCamera.classList.remove('triggered');
-          self.areaUnlock.classList.remove('triggered');
-
+          if (!self.screenReader)
+            self.overlay.classList.remove('triggered');
           clearTimeout(self.triggeredTimeoutId);
           self.setElasticEnabled(false);
         };
@@ -1085,7 +1095,7 @@ var LockScreen = {
     // If the timer is already running, stop it.
     this.stopElasticTimer();
     // If the document is visible, go ahead and start the timer now.
-    if (value && !document.hidden) {
+    if (value && !document.hidden && !this.screenReader) {
       this.startElasticTimer();
     }
   },

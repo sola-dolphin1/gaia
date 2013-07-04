@@ -571,7 +571,7 @@ var Camera = {
         Filmstrip.hide();
 
       // User closed app while recording was trying to start
-      if (document.mozHidden) {
+      if (document.hidden) {
         this.stopRecording();
       }
     }).bind(this);
@@ -890,6 +890,7 @@ var Camera = {
       var alertText = this._pendingPick ? 'activity-size-limit-reached' :
         'size-limit-reached';
       alert(navigator.mozL10n.get(alertText));
+      this.sizeLimitAlertActive = false;
     }
   },
 
@@ -1145,7 +1146,7 @@ var Camera = {
       // Preview may have previously been paused if storage
       // was not available
       // not trigger preview while in pick mode
-      if (!this._previewActive && !document.mozHidden && !this._pendingPick) {
+      if (!this._previewActive && !document.hidden && !this._pendingPick) {
         this.startPreview();
       }
       this.showOverlay(null);
@@ -1233,7 +1234,7 @@ var Camera = {
   },
 
   initPositionUpdate: function camera_initPositionUpdate() {
-    if (this._watchId || document.mozHidden) {
+    if (this._watchId || document.hidden) {
       return;
     }
     this._watchId = navigator.geolocation
@@ -1272,8 +1273,8 @@ var Camera = {
 
 Camera.init();
 
-document.addEventListener('mozvisibilitychange', function() {
-  if (document.mozHidden) {
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) {
     Camera.stopPreview();
     Camera.cancelPick();
     Camera.cancelPositionUpdate();
