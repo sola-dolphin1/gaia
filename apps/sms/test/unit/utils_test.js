@@ -719,16 +719,27 @@ suite('Utils.Template', function() {
   });
 
   suite('interpolate', function() {
-    var node = document.createElement('div');
-    node.appendChild(document.createComment('<span>${str}</span>'));
+    var html = document.createElement('div');
+    var css = document.createElement('div');
+    html.appendChild(document.createComment('<span>${str}</span>'));
+    css.appendChild(document.createComment('#foo { height: ${height}px; }'));
 
-    test('interpolate(data)', function() {
-      var tmpl = Utils.Template(node);
+    test('interpolate(data) => html', function() {
+      var tmpl = Utils.Template(html);
       var interpolated = tmpl.interpolate({
         str: 'test'
       });
       assert.equal(typeof interpolated, 'string');
       assert.equal(interpolated, '<span>test</span>');
+    });
+
+    test('interpolate(data) => css', function() {
+      var tmpl = Utils.Template(css);
+      var interpolated = tmpl.interpolate({
+        height: '100'
+      });
+      assert.equal(typeof interpolated, 'string');
+      assert.equal(interpolated, '#foo { height: 100px; }');
     });
   });
 
@@ -827,5 +838,76 @@ suite('Utils.Template', function() {
         '&lt;script&gt;alert(&quot;hi!&quot;)&lt;/script&gt;<p>this is ok</p>'
       );
     });
+  });
+});
+
+suite('getDisplayObject', function() {
+
+  test('Tel object with carrier title and type', function() {
+    var myTitle = 'My title';
+    var type = 'Mobile';
+    var carrier = 'Carrier';
+    var value = 111111;
+    var data = Utils.getDisplayObject(myTitle, {
+      'value': value,
+      'carrier': carrier,
+      'type': [type]
+    });
+
+    assert.equal(data.name, myTitle);
+    assert.equal(data.separator, ' | ');
+    assert.equal(data.type, type);
+    assert.equal(data.carrier, carrier + ', ');
+    assert.equal(data.number, value);
+  });
+
+  test('Tel object without title and type', function() {
+    var myTitle = 'My title';
+    var type = 'Mobile';
+    var value = 111111;
+    var data = Utils.getDisplayObject(myTitle, {
+      'value': value,
+      'carrier': null,
+      'type': [type]
+    });
+
+    assert.equal(data.name, myTitle);
+    assert.equal(data.separator, ' | ');
+    assert.equal(data.type, type);
+    assert.equal(data.carrier, '');
+    assert.equal(data.number, value);
+  });
+
+  test('Tel object with NO carrier title and NO type', function() {
+    var myTitle = 'My title';
+    var type = 'Mobile';
+    var value = 111111;
+    var data = Utils.getDisplayObject(myTitle, {
+      'value': value
+    });
+
+    assert.equal(data.name, myTitle);
+    assert.equal(data.separator, '');
+    assert.equal(data.type, '');
+    assert.equal(data.carrier, '');
+    assert.equal(data.number, value);
+  });
+
+  test('Tel object with carrier title and type and NO title', function() {
+    var myTitle = 'My title';
+    var type = 'Mobile';
+    var carrier = 'Carrier';
+    var value = 111111;
+    var data = Utils.getDisplayObject(null, {
+      'value': value,
+      'carrier': carrier,
+      'type': [type]
+    });
+
+    assert.equal(data.name, value);
+    assert.equal(data.separator, ' | ');
+    assert.equal(data.type, type);
+    assert.equal(data.carrier, carrier + ', ');
+    assert.equal(data.number, value);
   });
 });

@@ -332,7 +332,7 @@ var LockScreen = {
           this.clock.start(this.refreshClock.bind(this));
 
           // Show the unlock keypad immediately
-          if (this.passCodeEnabled) {
+          if (this.passCodeEnabled && this._passCodeTimeoutCheck) {
             this.switchPanel('passcode');
           }
         }
