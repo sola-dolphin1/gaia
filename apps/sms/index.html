@@ -31,8 +31,6 @@
     <!--
     <script defer src="shared/js/l10n_date.js"></script>
     <script defer src="shared/js/async_storage.js"></script>
-    <script defer src="shared/js/custom_dialog.js"></script>
-    <script defer src="shared/js/desktop.js"></script>
     <script defer src="shared/js/notification_helper.js"></script>
     <script defer src="shared/js/gesture_detector.js"></script>
     -->
@@ -148,7 +146,7 @@
           <button id="messages-attach-button" class="icon icon-attachment">Attachment</button>
           <button id="messages-send-button" disabled data-l10n-id="send" type="submit">Send</button>
           <!-- The <br> is needed because of 414223, which is a WONTFIX. It's just because of how contentEditable works. https://bugzilla.mozilla.org/show_bug.cgi?id=414223 -->
-          <div id="messages-input" contentEditable="true" name="message" placeholder="Message" data-l10n-id="composeMessage"><br></div>
+          <div id="messages-input" contentEditable="true" name="message" data-l10n-id="composeMessage"><br></div>
         </form>
         <form role="dialog" id="messages-edit-form" role="dialog" data-type="edit" >
           <section>
@@ -200,7 +198,7 @@
     <div id="messages-contact-tmpl" class="hide">
       <!--
       <a class="suggestion"
-        data-number="${number}" data-source="contacts" data-name="${name}">
+        data-number="${number}" data-source="contacts" data-name="${name}" data-display="${type}${separator}${carrier}${number}">
         <p class="name">${nameHTML}</p>
         <p>
           ${type}${separator}${carrier}${numberHTML}
@@ -270,7 +268,7 @@
       <!--
       <span class="recipient" x-inputmode="verbatim"
         contenteditable="${editable}"
-        data-number="${number}" data-source="${source}" data-name="${name}">
+        data-number="${number}" data-source="${source}" data-name="${name}" data-display="${display}">
         ${name}
       </span>
       -->
@@ -289,6 +287,15 @@
         </div>
         <div class="size-indicator">${size}</div>
       </body>
+      -->
+    </div>
+
+    <div id="height-rule-tmpl" class="hide">
+      <!--
+      #messages-recipients-list.multiline {
+        overflow-y: scroll;
+        height: ${height}px;
+      }
       -->
     </div>
   </body>

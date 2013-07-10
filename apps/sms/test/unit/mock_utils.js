@@ -11,6 +11,7 @@ var MockUtils = {
     return 12;
   },
   getDayDate: Utils.getDayDate,
+  getHeaderDate: Utils.getHeaderDate,
   getFormattedHour: Utils.getFormattedHour,
   updateTimeHeaders: function() {},
   // real code needed here to map types
@@ -23,7 +24,5 @@ var MockUtils = {
   getCarrierTag: Utils.getCarrierTag,
   removeNonDialables: Utils.removeNonDialables,
   compareDialables: Utils.compareDialables,
-  Message: {
-    format: function(str) { return str; }
-  }
+  getDisplayObject: Utils.getDisplayObject
 };
