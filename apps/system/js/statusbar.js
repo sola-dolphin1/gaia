@@ -472,6 +472,9 @@ var StatusBar = {
       if (!conn || !conn.voice)
         return;
 
+      if (!IccHelper.enabled)
+        return;
+
       var voice = conn.voice;
       var icon = this.icons.signal;
       var flightModeIcon = this.icons.flightMode;
@@ -487,7 +490,7 @@ var StatusBar = {
       flightModeIcon.hidden = true;
       icon.hidden = false;
 
-      if (conn.cardState === 'absent') {
+      if (IccHelper.cardState === 'absent') {
         // no SIM
         delete icon.dataset.level;
         delete icon.dataset.emergency;
