@@ -6,14 +6,21 @@
  anchor links for url, phone, email.
 */
 
+var ipv4RegExp = new RegExp(
+  '^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$');
 // ensure that each part of the domain is long enough
 function checkDomain(domain) {
-  var parts = domain.split('.');
-  // either the tld is more than one character or it is an IPv4
-  return parts[parts.length - 1].length > 1 ||
-    parts.length === 4 && parts.every(function(part) {
-      return part >= 0 && part < 256;
-    });
+  // Check for a specific IPv4 address
+  if (ipv4RegExp.test(domain)) {
+    return true;
+  } else {
+    // Don't add many restrictions,
+    // just the tld to be non numeric and length > 1
+    var parts = domain.split('.');
+    var lastPart = parts[parts.length - 1];
+    // We want the last part not to be a number
+    return lastPart.length > 1 && !isFinite(lastPart);
+  }
 }
 
 // defines things that can match right before to be a "safe" link
@@ -37,10 +44,11 @@ var LINK_TYPES = {
   phone: {
     regexp: new RegExp([
       // sddp: space, dot, dash or parens
-      '(?:\\+\\d{1,4}[\\s.()-]{0,3}|\\()?' +     // (\+<digits><sddp>|\()?
-      '(?:\\d{1,4}[\\s.()-]{0,3})?' +            // <digits><sdd>*
-      '(?:\\d[\\d\\s.()-]{0,100}\\d)'            // <digit><digit|sddp>*<digit>
-      ].join(''), 'mg'),
+      '(?:\\+\\d{1,4}[ \\t.()-]{0,3}|\\()?' +     // (\+<digits><sddp>|\()?
+      '(?:\\d{1,4}[ \\t.()-]{0,3})?' +            // <digits><sdd>*
+      '(?:\\d[\\d \\t.()-]{0,12}\\d)' +           // <digit><digit|sddp>*<digit>
+      '(?!\\d)' // the next character after can't be a digit
+      ].join(''), 'g'),
     matchFilter: function phoneMatchFilter(phone, link) {
       var onlyDigits = Utils.removeNonDialables(phone);
 

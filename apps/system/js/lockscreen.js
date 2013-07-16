@@ -143,7 +143,6 @@ var LockScreen = {
     /* Gesture */
     this.area.addEventListener('mousedown', this);
     this.areaCamera.addEventListener('click', this);
-    this.altCameraButton.addEventListener('click', this);
     this.areaUnlock.addEventListener('click', this);
     this.iconContainer.addEventListener('mousedown', this);
 
@@ -351,8 +350,7 @@ var LockScreen = {
 
       case 'click':
         if (evt.target === this.areaUnlock ||
-           evt.target === this.areaCamera ||
-           evt.target === this.altCameraButton) {
+           evt.target === this.areaCamera) {
           this.handleIconClick(evt.target);
           break;
         }
@@ -370,7 +368,6 @@ var LockScreen = {
         var rightTarget = this.areaUnlock;
         var handle = this.areaHandle;
         var overlay = this.overlay;
-        var target = evt.target;
 
         // Reset timer when touch while overlay triggered
         if (overlay.classList.contains('triggered')) {
@@ -515,7 +512,6 @@ var LockScreen = {
     var self = this;
     switch (target) {
       case this.areaCamera:
-      case this.altCameraButton:
         var panelOrFullApp = function panelOrFullApp() {
           // If the passcode is enabled and it has a timeout which has passed
           // switch to secure camera
@@ -587,7 +583,7 @@ var LockScreen = {
   },
 
   lockIfEnabled: function ls_lockIfEnabled(instant) {
-    if (FtuLauncher && FtuLauncher.isFtuRunning()) {      
+    if (FtuLauncher && FtuLauncher.isFtuRunning()) {
       this.unlock(instant);
       return;
     }
