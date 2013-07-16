@@ -892,7 +892,7 @@ window.addEventListener('load', function loadSettings() {
     }
 
     if (!IccHelper.enabled) {
-      disableSIMRelatedSubpanels(true);
+      return disableSIMRelatedSubpanels(true);
     }
 
     var cardState = IccHelper.cardState;

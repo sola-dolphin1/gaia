@@ -167,7 +167,6 @@ var LockScreen = {
     var conn = window.navigator.mozMobileConnection;
     if (conn && conn.voice) {
       conn.addEventListener('voicechange', this);
-      conn.addEventListener('iccinfochange', this);
       this.updateConnState();
       this.connstate.hidden = false;
     }
@@ -175,6 +174,7 @@ var LockScreen = {
     /* icc state on lock screen */
     if (IccHelper.enabled) {
       IccHelper.addEventListener('cardstatechange', this);
+      IccHelper.addEventListener('iccinfochange', this);
     }
 
     var self = this;
@@ -1109,7 +1109,7 @@ var LockScreen = {
     // If the timer is already running, stop it.
     this.stopElasticTimer();
     // If the document is visible, go ahead and start the timer now.
-    if (value && !document.hidden && !this.screenReader) {
+    if (value && !document.hidden) {
       this.startElasticTimer();
     }
   },
@@ -1124,7 +1124,7 @@ var LockScreen = {
   },
 
   playElastic: function ls_playElastic() {
-    if (this._touch && this._touch.touched)
+    if ((this._touch && this._touch.touched) || this.screenReader)
       return;
 
     var overlay = this.overlay;

@@ -349,10 +349,13 @@ var StatusBar = {
       var conn = window.navigator.mozMobileConnection;
       if (conn) {
         conn.addEventListener('voicechange', this);
-        conn.addEventListener('iccinfochange', this);
         conn.addEventListener('datachange', this);
         this.update.signal.call(this);
         this.update.data.call(this);
+      }
+
+      if (IccHelper.enabled) {
+        IccHelper.addEventListener('iccinfochange', this);
       }
 
       window.addEventListener('wifi-statuschange',
@@ -383,8 +386,11 @@ var StatusBar = {
       var conn = window.navigator.mozMobileConnection;
       if (conn) {
         conn.removeEventListener('voicechange', this);
-        conn.removeEventListener('iccinfochange', this);
         conn.removeEventListener('datachange', this);
+      }
+
+      if (IccHelper.enabled) {
+        IccHelper.removeEventListener('iccinfochange', this);
       }
 
       window.removeEventListener('moznetworkupload', this);
@@ -401,7 +407,7 @@ var StatusBar = {
       var label = this.icons.label;
       var l10nArgs = JSON.parse(label.dataset.l10nArgs || '{}');
 
-      if (!conn || !conn.voice || !conn.voice.connected ||
+      if (!IccHelper.enabled || !conn || !conn.voice || !conn.voice.connected ||
           conn.voice.emergencyCallsOnly) {
         delete l10nArgs.operator;
         label.dataset.l10nArgs = JSON.stringify(l10nArgs);

@@ -61,6 +61,21 @@ var IccHelper = (function() {
       }
     },
 
+    removeEventListener: function icch_removeEventListener() {
+      var eventName = arguments[0];
+      switch (eventName) {
+        case 'cardstatechange':
+          var actor = actors['cardState'];
+          return actor.removeEventListener.apply(actor, arguments);
+        case 'iccinfochange':
+          var actor = actors['iccInfo'];
+          return actor.removeEventListener.apply(actor, arguments);
+        case 'icccardlockerror':
+          var actor = actors['cardLock'];
+          return actor.removeEventListener.apply(actor, arguments);
+      }
+    },
+
     getCardLock: function icch_getCardLock() {
       var actor = actors['cardLock'];
       return actor.getCardLock.apply(actor, arguments);
@@ -84,6 +99,21 @@ var IccHelper = (function() {
     get iccInfo() {
       var actor = actors['iccInfo'];
       return actor.iccInfo;
+    },
+
+    set oncardstatechange(callback) {
+      var actor = actors['cardState'];
+      actor.oncardstatechange = callback;
+    },
+
+    set oniccinfochange(callback) {
+      var actor = actors['iccInfo'];
+      actor.oniccinfochange = callback;
+    },
+
+    set onicccardlockerror(callback) {
+      var actor = actors['cardLock'];
+      actor.onicccardlockerror = callback;
     }
   };
 })();
