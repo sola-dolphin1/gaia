@@ -322,6 +322,7 @@ navigator.mozL10n.ready(function wifiSettings() {
     // clear the network list
     function clear(addScanningItem) {
       index = [];
+      networks = {};
 
       // remove all items except the text expl. and the "search again" button
       var wifiItems = list.querySelectorAll('li:not([data-state])');
@@ -349,10 +350,11 @@ navigator.mozL10n.ready(function wifiSettings() {
       var req = gWifiManager.getNetworks();
 
       req.onsuccess = function onScanSuccess() {
+        clear(false);
         var allNetworks = req.result;
         for (var i = 0; i < allNetworks.length; ++i) {
           var network = allNetworks[i];
-          // use ssid + capabilities as a composited key
+          // use ssid + security as a composited key
           var key = network.ssid + '+' +
             WifiHelper.getSecurity(network).join('+');
           // keep connected network first, or select the highest strength
@@ -360,13 +362,13 @@ navigator.mozL10n.ready(function wifiSettings() {
             networks[key] = network;
           } else {
             if (!networks[key].connected &&
-                network.relSignalStrength > networks[key].relSignalStrength)
+                network.relSignalStrength > networks[key].relSignalStrength) {
               networks[key] = network;
+            }
           }
         }
 
         var networkKeys = Object.getOwnPropertyNames(networks);
-        clear(false);
 
         // display network list
         if (networkKeys.length) {

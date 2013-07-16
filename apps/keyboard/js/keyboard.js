@@ -170,7 +170,6 @@ var currentInputType = null;
 var currentInputMode = null;
 var menuLockedArea = null;
 var layoutMenuLockedArea = null;
-var candidatePanelEnabled = false;
 var isKeyboardRendered = false;
 var currentCandidates = [];
 const CANDIDATE_PANEL_SWITCH_TIMEOUT = 100;
@@ -193,6 +192,7 @@ const CAPS_LOCK_TIMEOUT = 450;
 var deleteTimeout = 0;
 var deleteInterval = 0;
 var menuTimeout = 0;
+var redrawTimeout = 0;
 
 // This object has one property for each keyboard layout setting.
 // If the user turns on that setting in the settings app, the value of
@@ -287,12 +287,6 @@ var eventHandlers = {
   'mousemove': onMouseMove
 };
 
-// For "swipe down to hide" feature
-var touchStartCoordinate;
-var keyboardLaunchedBefore = true;
-const SWIPE_VELOCICTY_THRESHOLD = 0.4;
-const KEYBOARD_LAUNCHED_KEY = 'keyboard.launched';
-
 // The first thing we do when the keyboard app loads is query all the
 // keyboard-related settings. Only once we have the current settings values
 // do we initialize the rest of the keyboard
@@ -338,11 +332,6 @@ function getKeyboardSettings() {
     // And create an array of all enabled keyboard layouts from the set
     // of enabled groups
     handleNewKeyboards();
-
-    // To see if this is first time the user launches the keyboard
-    asyncStorage.getItem(KEYBOARD_LAUNCHED_KEY, function(launched) {
-      keyboardLaunchedBefore = launched;
-    });
 
     // We've got all the settings, so initialize the rest
     initKeyboard();
@@ -407,33 +396,6 @@ function initKeyboard() {
   for (var event in eventHandlers) {
     IMERender.ime.addEventListener(event, eventHandlers[event]);
   }
-
-  // Prevent focus being taken away by tip window
-  var tipWindow = document.getElementById('confirm-dialog');
-  function tipFocusHandler(evt) {
-    evt.preventDefault();
-  }
-
-  tipWindow.addEventListener('mousedown', tipFocusHandler);
-
-  var tipButton = document.getElementById('ftu-ok');
-  tipButton.addEventListener('click', function(evt) {
-    // Need to preventDefault or it will make the input lose the focus
-    evt.preventDefault();
-    tipWindow.hidden = true;
-  });
-
-  /* To simulate :active effect for button */
-  tipButton.addEventListener('mousedown', function mouseDownHandler(evt) {
-    tipButton.classList.add('active');
-  });
-
-  var inActiveHandlers = ['mouseup', 'mouseleave'];
-  inActiveHandlers.forEach(function addInActiveHandler(evtName) {
-    tipButton.addEventListener(evtName, function inActiveHandler(evt) {
-      tipButton.classList.remove('active');
-    });
-  });
 
   dimensionsObserver = new MutationObserver(function() {
     updateTargetWindowHeight();
@@ -823,25 +785,29 @@ function renderKeyboard(keyboardName) {
     isKeyboardRendered = true;
   }
 
+  clearTimeout(redrawTimeout);
+
   // Does this new keyboard use the candidate panel?
   var showsCandidates = needsCandidatePanel();
 
-  // If it doesn't and the last one did, then notify the keyboard manager
-  // update the app window size before redrawing the keyboard.
-  if (!showsCandidates && candidatePanelEnabled) {
+  // If it doesn't and the keyboard has be shown, then notify the keyboard
+  // manager update the app window size before redrawing the keyboard.
+  // XXX: for Bug 893755 - we would always do the delay of keyboard redrawing
+  // without regard to whether candidate panel was enabled or not last time.
+  if (!showsCandidates && isKeyboardRendered) {
     var candidatePanel = document.getElementById('keyboard-candidate-panel');
     var candidatePanelHeight = (candidatePanel) ?
                                candidatePanel.scrollHeight : 0;
     document.location.hash = 'show=' +
       (IMERender.ime.scrollHeight - candidatePanelHeight);
 
-    window.setTimeout(drawKeyboard, CANDIDATE_PANEL_SWITCH_TIMEOUT);
+    redrawTimeout = window.setTimeout(drawKeyboard,
+                                      CANDIDATE_PANEL_SWITCH_TIMEOUT);
   } else {
     drawKeyboard();
   }
 
   // Remember whether the candidate panel is shown or not
-  candidatePanelEnabled = showsCandidates;
 }
 
 function setUpperCase(upperCase, upperCaseLocked) {
@@ -1115,11 +1081,6 @@ function onTouchStart(evt) {
 
     touchedKeys[touchId] = { target: target, x: touch.pageX, y: touch.pageY };
     startPress(target, touch, touchId);
-
-    touchStartCoordinate = { touchId: touchId,
-                             pageX: touch.pageX,
-                             pageY: touch.pageY,
-                             timeStamp: evt.timeStamp };
   });
 }
 
@@ -1152,31 +1113,6 @@ function onTouchEnd(evt) {
   touchCount = evt.touches.length;
 
   handleTouches(evt, function handleTouchEnd(touch, touchId) {
-
-    // Swipe down can trigger hiding the keyboard
-    if (touchStartCoordinate && touchStartCoordinate.touchId == touchId) {
-      var dx = touch.pageX - touchStartCoordinate.pageX;
-      var dy = touch.pageY - touchStartCoordinate.pageY;
-      var dt = evt.timeStamp - touchStartCoordinate.timeStamp;
-      var vy = dy / dt;
-
-      var keyboardHeight = IMERender.ime.scrollHeight;
-
-      // hide the keyboard if:
-      // 1. swipe down
-      // 2. the distance is longer than half of the keyboard
-      if ((dy > keyboardHeight / 2 && dy > dx) &&
-          vy > SWIPE_VELOCICTY_THRESHOLD) {
-
-        // de-activate the highlighted effect
-        if (touchedKeys[touchId])
-          IMERender.unHighlightKey(touchedKeys[touchId].target);
-
-        window.navigator.mozKeyboard.removeFocus();
-        return;
-      }
-    }
-
     // Because of bug 822558, we sometimes get two touchend events,
     // so we should bail if we've already handled one touchend.
     if (!touchedKeys[touchId])
@@ -1573,13 +1509,13 @@ function switchKeyboard(target) {
 
 // Turn to default values
 function resetKeyboard() {
-  // Don't call setLayoutPage because we call renderKeyboard() below
+  // Don't call setLayoutPage because renderKeyboard() should be invoked
+  // separately after this function
   layoutPage = LAYOUT_PAGE_DEFAULT;
-  // Don't call setUpperCase because we call renderKeyboard() below
+  // Don't call setUpperCase because renderKeyboard() should be invoked
+  // separately after this function
   isUpperCase = false;
   isUpperCaseLocked = false;
-
-  IMERender.setUpperCaseLock(isUpperCase);
 }
 
 // This is a wrapper around mozKeyboard.sendKey()
@@ -1635,13 +1571,6 @@ function showKeyboard(state) {
     });
   }
 
-  if (!keyboardLaunchedBefore) {
-    var dialog = document.getElementById('confirm-dialog');
-    dialog.hidden = false;
-    keyboardLaunchedBefore = true;
-    asyncStorage.setItem(KEYBOARD_LAUNCHED_KEY, true);
-  }
-
   // render the keyboard after activation, which will determine the state
   // of uppercase/suggestion, etc.
   renderKeyboard(keyboardName);
@@ -1653,8 +1582,6 @@ function hideKeyboard() {
   if (inputMethod.deactivate)
     inputMethod.deactivate();
 
-  // reset the flag for candidate show/hide workaround
-  candidatePanelEnabled = false;
   isKeyboardRendered = false;
 }
 
@@ -1854,7 +1781,7 @@ function getSettings(settings, callback) {
 
 // To determine if the candidate panel for word suggestion is needed
 function needsCandidatePanel() {
-  return ((Keyboards[keyboardName].autoCorrectLanguage ||
+  return !!((Keyboards[keyboardName].autoCorrectLanguage ||
            Keyboards[keyboardName].needsCandidatePanel) &&
           (!inputMethod.displaysCandidates ||
            inputMethod.displaysCandidates()));
