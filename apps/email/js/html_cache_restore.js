@@ -1,8 +1,26 @@
+/*
+var _xstart = performance.timing.fetchStart -
+              performance.timing.navigationStart;
+function plog(msg) {
+  console.log(msg + ' ' + (performance.now() - _xstart));
+}
+*/
+
+// Use a global to work around issue with
+// navigator.mozHasPendingMessage only returning
+// true to the first call made to it.
+window.htmlCacheRestoreDetectedActivity = false;
+
 (function() {
   /**
-   * Version number for cache, allows expiring
+   * Version number for cache, allows expiring cache.
+   * Set by build process, value must match the value
+   * in html_cache.js.
    */
-  var CACHE_VERSION = '1';
+  var CACHE_VERSION = '1',
+      selfNode = document.querySelector('[data-loadsrc]'),
+      loader = selfNode.dataset.loader,
+      loadSrc = selfNode.dataset.loadsrc;
 
   /**
    * Gets the HTML string from cache.
@@ -44,14 +62,30 @@
    * ASSUMES card node is available (DOMContentLoaded or execution of
    * module after DOM node is in doc)
    */
-  var cardsNode = document.getElementById('cards');
+  var cardsNode = document.getElementById(selfNode.dataset.targetid);
 
-  cardsNode.innerHTML = retrieve();
-
-  window.addEventListener('load', function(evt) {
+  function startApp() {
     var scriptNode = document.createElement('script');
-    scriptNode.src = 'built/mail_app.js';
+
+    if (loader) {
+      scriptNode.setAttribute('data-main', loadSrc);
+      scriptNode.src = loader;
+    } else {
+      scriptNode.src = loadSrc;
+    }
+
     document.head.appendChild(scriptNode);
-  }, false);
+  }
+
+  if (navigator.mozHasPendingMessage &&
+      navigator.mozHasPendingMessage('activity')) {
+    // TODO: mozHasPendingMessage can only be called once?
+    // Need to set up variable to delay normal code logic later
+    window.htmlCacheRestoreDetectedActivity = true;
+    startApp();
+  } else {
+    cardsNode.innerHTML = retrieve();
+    window.addEventListener('load', startApp, false);
+  }
 }());
 

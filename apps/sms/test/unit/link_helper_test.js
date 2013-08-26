@@ -212,9 +212,15 @@ suite('link_helper_test.js', function() {
 
   suite('LinkHelper Phone replacements', function() {
 
+    function testPhoneMatch(text, match) {
+      var expected = text.replace(match, phone2msg(match));
+      var result = LinkHelper.searchAndLinkClickableData(text);
+      assert.equal(result, expected);
+    }
+
     function phone2msg(phone) {
-      return '<a data-phonenumber="' + phone + '"' +
-             ' data-action="phone-link">' + phone + '</a>';
+      return '<a data-dial="' + phone + '"' +
+             ' data-action="dial-link">' + phone + '</a>';
     }
 
     function testPhoneOK(phone) {
@@ -239,6 +245,13 @@ suite('link_helper_test.js', function() {
 
       test('Phone from #887737', function() {
         testPhoneOK('+5511 98907-6047');
+      });
+
+      test('word before trailing number', function() {
+        testPhoneMatch('Test1 600123123', '600123123');
+      });
+      test('word after preceding number', function() {
+        testPhoneMatch('600123123 1Test', '600123123');
       });
     });
 
@@ -287,7 +300,7 @@ suite('link_helper_test.js', function() {
         '<a data-url="http://stackoverflow.com/q/12882966/" ' +
         'data-action="url-link" >http://stackoverflow.com/q/12882966/</a>' +
         ' and call me at ' +
-        '<a data-phonenumber="+18155551212" data-action="phone-link">' +
+        '<a data-dial="+18155551212" data-action="dial-link">' +
         '+18155551212</a> or (e-mail <a data-email="user@hostname.tld"' +
         ' data-action="email-link">user@hostname.tld</a>)';
       assert.equal(LinkHelper.searchAndLinkClickableData(test), expected);

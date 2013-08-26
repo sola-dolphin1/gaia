@@ -32,42 +32,51 @@
           length = headers.length,
           i, ts, header, headerDate, formattedHour, newHeader;
 
-      if (length) {
-        for (i = 0; i < length; i++) {
-          header = headers[i];
-          ts = header.dataset.time;
-          headerDate = Utils.getHeaderDate(ts);
-          formattedHour = Utils.getFormattedHour(ts);
-
-          // only date
-          if (header.dataset.isThread) {
-            newHeader = headerDate;
-
-          // only time
-          } else if (header.dataset.hourOnly) {
-            newHeader = formattedHour;
-
-          // date + time
-          } else {
-            newHeader = headerDate + ' ' + formattedHour;
-          }
-
-          if (newHeader !== header.textContent) {
-            header.textContent = newHeader;
-          }
-        }
+      for (i = 0; i < length; i++) {
+        Utils.updateTimeHeader(headers[i]);
       }
 
       FixedHeader.updateHeaderContent();
     },
-    startTimeHeaderScheduler: function ut_startTimeHeaderScheduler() {
-      this.updateTimeHeaders();
-      if (this.updateTimer) {
-        clearInterval(this.updateTimer);
+
+    updateTimeHeader: function ut_updateTimeHeader(header) {
+      var ts = header.dataset.time;
+      if (!ts) {
+        return;
       }
-      this.updateTimer = setInterval(function(self) {
-        self.updateTimeHeaders();
-      }, 50000, this);
+
+      var newHeader;
+
+      // only date
+      if (header.dataset.isThread === 'true') {
+        newHeader = Utils.getHeaderDate(ts);
+
+      // only time
+      } else if (header.dataset.timeOnly === 'true') {
+        newHeader = Utils.getFormattedHour(ts);
+
+      // date + time
+      } else {
+        newHeader = Utils.getHeaderDate(ts) + ' ' + Utils.getFormattedHour(ts);
+      }
+
+      if (newHeader !== header.textContent) {
+        header.textContent = newHeader;
+      }
+    },
+
+    startTimeHeaderScheduler: function ut_startTimeHeaderScheduler() {
+      var updateFunction = (function() {
+        this.updateTimeHeaders();
+        var now = Date.now(),
+            nextTimeout = new Date(now + 60000);
+        nextTimeout.setSeconds(0);
+        nextTimeout.setMilliseconds(0);
+        clearTimeout(this.updateTimer);
+        this.updateTimer = setTimeout(updateFunction,
+          nextTimeout.getTime() - now);
+      }).bind(this);
+      updateFunction();
     },
     escapeRegex: function ut_escapeRegex(str) {
       if (typeof str !== 'string') {
@@ -95,11 +104,11 @@
       return this.date.shared.getTime();
     },
     getHeaderDate: function ut_giveHeaderDate(time) {
-      this.date.shared.setTime(+time);
       var _ = navigator.mozL10n.get;
       var today = Utils.getDayDate(Date.now());
       var otherDay = Utils.getDayDate(time);
       var dayDiff = (today - otherDay) / 86400000;
+      this.date.shared.setTime(+time);
 
       if (isNaN(dayDiff)) {
         return _('incorrectDate');
@@ -114,7 +123,7 @@
 
       return dayDiff === 0 && _('today') ||
         dayDiff === 1 && _('yesterday') ||
-        dayDiff < 4 && this.date.format.localeFormat(this.date.shared, '%A') ||
+        dayDiff < 6 && this.date.format.localeFormat(this.date.shared, '%A') ||
         this.date.format.localeFormat(this.date.shared, '%x');
     },
     getFontSize: function ut_getFontSize() {
@@ -307,41 +316,98 @@
       return a === b;
     },
 
+    // Default image size limitation is set to 300KB for MMS user story.
+    // If limit is not given or bigger than default 300KB, default value need
+    // to be applied here for size checking. Parameters could be:
+    // (blob, callback) : Resizing image to default limit 300k.
+    // (blob, limit, callback) : Resizing image to given limitation.
     getResizedImgBlob: function ut_getResizedImgBlob(blob, limit, callback) {
-      // Default image size limitation is set to 300KB for MMS user story.
-      // If limit is not given or bigger than default 300KB, default value need
-      // to be appied here for size checking.
       var defaultLimit = 300 * 1024;
       if (typeof limit === 'function') {
         callback = limit;
         limit = defaultLimit;
       }
       limit = limit === 0 ? defaultLimit : Math.min(limit, defaultLimit);
+
       if (blob.size < limit) {
         setTimeout(function blobCb() {
           callback(blob);
         });
-      } else {
-        var img = document.createElement('img');
-        var url = URL.createObjectURL(blob);
-        img.src = url;
-        img.onload = function onBlobLoaded() {
-          var image_width = img.width;
-          var image_height = img.height;
-          var ratio = Math.sqrt(Math.ceil(blob.size / limit * 10) / 10);
-          var target_width = image_width / ratio;
-          var target_height = image_height / ratio;
-
-          var canvas = document.createElement('canvas');
-          canvas.width = target_width;
-          canvas.height = target_height;
-          var context = canvas.getContext('2d');
-
-          context.drawImage(img, 0, 0, target_width, target_height);
-          URL.revokeObjectURL(url);
-          canvas.toBlob(callback, blob.type);
-        };
+        return;
       }
+      var ratio = Math.sqrt(blob.size / limit);
+      Utils.resizeImageBlobWithRatio({
+        blob: blob,
+        limit: limit,
+        ratio: ratio,
+        callback: callback
+      });
+    },
+
+    //  resizeImageBlobWithRatio have additional ratio to force image
+    //  resize to smaller size to avoid edge case about quality adjustment
+    //  not working.
+    resizeImageBlobWithRatio: function ut_resizeImageBlobWithRatio(obj) {
+      var blob = obj.blob;
+      var callback = obj.callback;
+      var limit = obj.limit;
+      var ratio = obj.ratio;
+      var qualities = [0.75, 0.5, 0.25];
+
+      if (blob.size < limit) {
+        setTimeout(function blobCb() {
+          callback(blob);
+        });
+        return;
+      }
+
+      var img = document.createElement('img');
+      var url = URL.createObjectURL(blob);
+      img.src = url;
+      img.onload = function onBlobLoaded() {
+        URL.revokeObjectURL(url);
+        var imageWidth = img.width;
+        var imageHeight = img.height;
+        var targetWidth = imageWidth / ratio;
+        var targetHeight = imageHeight / ratio;
+
+        var canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        var context = canvas.getContext('2d');
+
+        context.drawImage(img, 0, 0, targetWidth, targetHeight);
+        // Bug 889765: Since we couldn't know the quality of the original jpg
+        // The 'resized' image might have a bigger size because it was saved
+        // with quality or dpi. Here we will adjust the jpg quality(or resize
+        // blob again if low quality blob size still exceed limit) to make
+        // sure the size won't exceed the limitation.
+        var level = 0;
+
+        function ensureSizeLimit(resizedBlob) {
+          if (resizedBlob.size < limit) {
+            callback(resizedBlob);
+          } else {
+            // Reduce image quality for match limitation. Here we set quality
+            // to 0.75, 0.5 and 0.25 for image blob resizing.
+            // (Default image quality is 0.92 for jpeg)
+            if (level < qualities.length) {
+              canvas.toBlob(ensureSizeLimit, 'image/jpeg',
+                qualities[level++]);
+            } else {
+              // We will resize the blob if image quality = 0.25 still exceed
+              // size limitation.
+              Utils.resizeImageBlobWithRatio({
+                blob: blob,
+                limit: limit,
+                ratio: ratio * 2,
+                callback: callback
+              });
+            }
+          }
+        }
+        canvas.toBlob(ensureSizeLimit, blob.type);
+      };
     },
     camelCase: function ut_camelCase(str) {
       return str.replace(rdashes, function replacer(str, p1) {
@@ -383,43 +449,40 @@
 
       Used mainly in activities since they need to pick a contact from just
       the number.
+
+      In order to workaround facebook contact issue(bug 895817), it should be
+      able to handle the case about phone number without matched contact.
     */
     getContactDisplayInfo: function(resolver, phoneNumber, callback) {
       resolver(phoneNumber, function onContacts(contacts) {
         var contact;
         if (Array.isArray(contacts)) {
-          if (contacts.length == 0) {
-            callback(null);
-            return;
+          if (contacts.length > 0) {
+            contact = contacts[0];
           }
-          contact = contacts[0];
-        } else {
-          if (contacts === null) {
-            callback(null);
-            return;
-          }
+        } else if (contacts !== null) {
           contact = contacts;
         }
 
-        var tel = null;
-        for (var i = 0; i < contact.tel.length && tel == null; i++) {
+        // Only exit when no contact and no phone number case.
+        if (!contact && !phoneNumber) {
+          callback(null);
+          return;
+        }
+
+        var telLength = (contact && contact.tel) ? contact.tel.length : 0;
+        var tel = (telLength > 0) ? null :
+          {type: [''], value: phoneNumber, carrier: ''};
+
+        for (var i = 0; i < telLength && tel == null; i++) {
           if (contact.tel[i].value === phoneNumber) {
             tel = contact.tel[i];
           }
         }
 
-        // Get the title in the standar way
+        // Get the title in the standard way
         var details = Utils.getContactDetails(tel, contact);
         var info = Utils.getDisplayObject(details.title || null, tel);
-        /*
-          XXX: We need to move this to use a single point for
-          formating:
-          ${type}${separator}${carrier}${numberHTML}
-        */
-        info.display = info.type +
-          info.separator +
-          info.carrier +
-          tel.value;
 
         callback(info);
       });

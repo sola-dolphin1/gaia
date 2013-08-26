@@ -740,11 +740,14 @@ suiteGroup('Provider.Caldav', function() {
       });
 
       test('result', function(done) {
+        var isAsync = false;
         // tokens match should not sync!
         subject.syncEvents(account, calendar, function() {
           assert.ok(!calledWith);
+          assert.ok(isAsync, 'should be async');
           done();
         });
+        isAsync = true;
       });
 
       test('offline handling', function(done) {
@@ -844,6 +847,8 @@ suiteGroup('Provider.Caldav', function() {
           oncomplete
         );
 
+        pull.stream.emit('end', {});
+
         function oncomplete() {
           var expected = [
             account.toJSON(),
@@ -897,7 +902,8 @@ suiteGroup('Provider.Caldav', function() {
         cached: cached
       };
 
-      subject._syncEvents(account, calendar, cached, oncomplete);
+      var pull = subject._syncEvents(account, calendar, cached, oncomplete);
+      pull.stream.emit('end', {});
 
       function oncomplete() {
         var expected = [

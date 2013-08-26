@@ -261,9 +261,12 @@
 
       case 'nextReset':
         ConfigManager.requestSettings(function _onSettings(settings) {
-          resetAll();
-          updateNextReset(settings.trackingPeriod, settings.resetTime);
-          closeIfProceeds();
+          resetAll(function updateNextResetAndClose() {
+            updateNextReset(
+              settings.trackingPeriod, settings.resetTime,
+              closeIfProceeds
+            );
+          });
         });
         break;
     }
@@ -473,6 +476,7 @@
         function _onCall(tcall) {
           clearTimeout(closing);
           if (tcall.direction !== 'outgoing') {
+            closeIfProceeds();
             return;
           }
           debug('Outgoing call finished!');

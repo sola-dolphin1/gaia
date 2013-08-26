@@ -8,10 +8,12 @@
 // This file depends on JPEGMetadataParser.js and blobview.js
 //
 var metadataParser = (function() {
+  var DEVICE_RATIO = window.devicePixelRatio;
   // If we generate our own thumbnails, aim for this size.
   // Calculate needed size from longer side of the screen.
   var THUMBNAIL_WIDTH = Math.round(
-                          Math.max(window.innerWidth, window.innerHeight) / 4);
+                          Math.max(window.innerWidth, window.innerHeight) *
+                            DEVICE_RATIO / 4);
   var THUMBNAIL_HEIGHT = THUMBNAIL_WIDTH;
 
   // Don't try to decode image files of unknown type if bigger than this
@@ -204,7 +206,7 @@ var metadataParser = (function() {
         // If the preview is big enough, use it to create a thumbnail.
         // A preview is big enough if at least one dimension is >= the
         // screen size in both portait and landscape mode.
-        if ((pw >= sw || pw >= sh) && (pw >= sh || ph >= sw)) {
+        if ((pw >= sw || ph >= sh) && (pw >= sh || ph >= sw)) {
           // The final argument true means don't actually create a preview
           createThumbnailAndPreview(previewblob,
                                     function(m) {

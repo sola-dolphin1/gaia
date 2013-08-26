@@ -22,8 +22,11 @@
     this.email = opts.email || '';
     this.editable = opts.editable || 'true';
     this.source = opts.source || 'manual';
-    this.display = opts.display || '';
+    this.type = opts.type || '';
+    this.separator = opts.separator || '';
+    this.carrier = opts.carrier || '';
   }
+
   /**
    * set
    *
@@ -268,10 +271,14 @@
     var index = typeof recipOrIndex === 'number' ?
       recipOrIndex : list.indexOf(recipOrIndex);
 
+    if (index === -1) {
+      return this;
+    }
+
     list.splice(index, 1);
     this.emit('remove', list.length);
 
-    return this.render();
+    return this.render(index);
   };
 
   Recipients.prototype.render = function() {
@@ -512,7 +519,14 @@
     var range = document.createRange();
     var selection = window.getSelection();
 
-    node = node || view.inner.lastElementChild;
+    if (!node) {
+      node = view.inner.lastElementChild;
+      if (!node.isPlaceholder) {
+        node = view.inner.appendChild(
+          this.placeholder
+        );
+      }
+    }
 
     if (node && node.isPlaceholder) {
       node.contentEditable = true;
@@ -575,30 +589,30 @@
 
     // Once the transition has ended, the set focus to
     // the last child element in the recipients list view
-    view.outer.addEventListener('transitionend', function te() {
-      var last;
+    view.inner.parentNode.addEventListener('transitionend', function te() {
+      var last = view.inner.lastElementChild;
+      var previous;
 
-      if (state.visible === 'singleline' && opts.refocus) {
-        last = view.inner.lastElementChild;
+      if (location.hash === '#new' && state.visible === 'singleline') {
+        while (last !== null && last.isPlaceholder) {
+          previous = last.previousElementSibling;
+          if (!last.textContent) {
+            last.parentNode.removeChild(last);
+          }
+          last = previous;
+        }
 
         if (opts.refocus) {
           opts.refocus.focus();
-        } else {
-          last.focus();
         }
+      }
 
-        if (opts.refocus && opts.noPreserve) {
-          while (last.isPlaceholder) {
-            last.parentNode.removeChild(last);
-            last = view.inner.lastElementChild;
-          }
-        }
-
+      if (last !== null) {
         last.scrollIntoView(true);
       }
 
       state.isTransitioning = false;
-      view.outer.removeEventListener('transitionend', te, false);
+      this.removeEventListener('transitionend', te, false);
     });
 
     // Commence the transition
@@ -635,6 +649,7 @@
     var target = event.target;
     var keyCode = event.keyCode;
     var editable = 'false';
+    var lastElement = view.inner.lastElementChild;
     var typed, recipient, length, last, list, previous;
 
     // All keyboard events will need some information
@@ -695,7 +710,8 @@
           // If Recipient is clicked while another is actively
           // being editted, save the in-edit recipient before
           // transforming the target into an editable recipient.
-          typed = view.inner.lastElementChild.textContent.trim();
+          typed = lastElement && lastElement.isPlaceholder ?
+            lastElement.textContent.trim() : '';
 
           if (typed) {
             owner.add({
@@ -773,12 +789,6 @@
           //
           // 2. Focus for fat fingering!
           //
-          if (!view.inner.lastElementChild.isPlaceholder) {
-            view.inner.appendChild(
-              this.placeholder
-            );
-          }
-
           if (view.state.visible !== 'singleline') {
             this.visible('singleline', {
               refocus: this
@@ -954,6 +964,22 @@
         }
       };
 
+      // build fragment for dialog body
+      var dialogBody = document.createDocumentFragment();
+      if (recipient.type) {
+        var typeElement = document.createElement('span');
+        if (!navigator.mozL10n.get(recipient.type)) {
+          typeElement.textContent = recipient.type;
+        } else {
+          navigator.mozL10n.localize(typeElement, recipient.type);
+        }
+        dialogBody.appendChild(typeElement);
+      }
+
+      dialogBody.appendChild(document.createTextNode(
+        recipient.separator + recipient.carrier + recipient.number
+      ));
+
       // Dialog will have a closure reference to the response
       // object, therefore it's not necessary to pass it around
       // as an explicit param list item.
@@ -964,7 +990,7 @@
             l10n: false
           },
           body: {
-            value: recipient.display,
+            value: dialogBody,
             l10n: false
           },
           options: {

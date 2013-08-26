@@ -1,7 +1,7 @@
 
 'use strict';
 
-const DragDropManager = (function() {
+var DragDropManager = (function() {
 
   /*
    * It defines the time (in ms) while checking limits is disabled
@@ -12,6 +12,11 @@ const DragDropManager = (function() {
    * It defines the time (in ms) between consecutive rearranges
    */
   var REARRANGE_DELAY = 50;
+
+  /*
+   * It defines the time (in ms) to ensure that the dragend event is performed
+   */
+  var ENSURE_DRAG_END_DELAY = 1000;
 
   /*
    * Drop feature is disabled (in the borders of the icongrid)
@@ -199,10 +204,20 @@ const DragDropManager = (function() {
     isDisabledDrop = false;
     transitioning = false;
     var page = getPage();
+    var ensureCallbackID = null;
     DragLeaveEventManager.send(page, function(done) {
-      draggableIcon.onDragStop(callback);
+      if (ensureCallbackID !== null) {
+        window.clearTimeout(ensureCallbackID);
+        draggableIcon.onDragStop(callback);
+      }
       done();
     }, true);
+
+    // We ensure that there is not an icon lost on the grid
+    ensureCallbackID = window.setTimeout(function() {
+      ensureCallbackID = null;
+      draggableIcon.onDragStop(callback);
+    }, ENSURE_DRAG_END_DELAY);
   }
 
   function drop(page) {
@@ -323,7 +338,9 @@ const DragDropManager = (function() {
   }
 
   function onEnd(evt) {
-    clearTimeout(overlapingTimeout);
+    if (overlapingTimeout !== null) {
+      clearTimeout(overlapingTimeout);
+    }
     window.removeEventListener(touchmove, onMove);
     window.removeEventListener(touchend, onEnd);
     stop(function dg_stop() {
@@ -371,6 +388,14 @@ const DragDropManager = (function() {
 
     return {
      /*
+      * This method initializes the component
+      */
+      init: function init() {
+        events = [];
+        working = false;
+      },
+
+     /*
       * This method performs all operations needed before changing of page
       *
       * @param{Object}   Page object that will receive the event
@@ -413,11 +438,12 @@ const DragDropManager = (function() {
     start: function ddm_start(evt, initCoords) {
       window.addEventListener(touchend, onEnd);
       window.addEventListener(touchmove, onMove);
+      DragLeaveEventManager.init();
       GridManager.onDragStart();
       DockManager.onDragStart();
       sx = initCoords.x;
       sy = initCoords.y;
-      isDockDisabled = false;
+      isDockDisabled = isDisabledDrag = isDisabledDrop = false;
       overlapingDock = (initCoords.y >= limitY) ? true : false;
       originElem = evt.target;
       onStart(originElem.classList.contains('options') ? originElem.parentNode :

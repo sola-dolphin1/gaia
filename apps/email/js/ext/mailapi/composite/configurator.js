@@ -837,8 +837,10 @@ console.log('BISECT CASE', serverUIDs.length, 'curDaysDelta', curDaysDelta);
       });
 
       // we may not have any requests bail early if so.
-      if (!requests.length)
-        callback(); // no requests === success
+      if (!requests.length) {
+        callback(null, bodyInfo); // no requests === success
+        return;
+      }
 
       var fetch = new $imapbodyfetcher.BodyFetcher(
         self._conn,
@@ -935,7 +937,8 @@ console.log('BISECT CASE', serverUIDs.length, 'curDaysDelta', curDaysDelta);
   },
 
   /**
-   * Download snippets for a set of headers.
+   * The actual work of downloadBodies, lazily replaces downloadBodies once
+   * module deps are loaded.
    */
   _lazyDownloadBodies: function(headers, options, callback) {
     var pending = 1, downloadsNeeded = 0;
@@ -977,6 +980,9 @@ console.log('BISECT CASE', serverUIDs.length, 'curDaysDelta', curDaysDelta);
     window.setZeroTimeout(next);
   },
 
+  /**
+   * Download snippets or entire bodies for a set of headers.
+   */
   downloadBodies: function() {
     var args = Array.slice(arguments);
     var self = this;
@@ -3068,7 +3074,7 @@ ImapAccount.prototype = {
    * want to consider persisting our state.
    */
   __checkpointSyncCompleted: function() {
-    this.saveAccountState();
+    this.saveAccountState(null, null, 'checkpointSync');
   },
 
   /**
@@ -3405,6 +3411,8 @@ ImapAccount.prototype = {
 
         username: this._credentials.username,
         password: this._credentials.password,
+
+        blacklistedCapabilities: this._connInfo.blacklistedCapabilities,
       };
       if (this._LOG) opts._logParent = this._LOG;
       var conn = this._pendingConn = new $imap.ImapConnection(opts);
@@ -3571,6 +3579,7 @@ ImapAccount.prototype = {
       // Process the attribs for goodness.
       for (var i = 0; i < box.attribs.length; i++) {
         switch (box.attribs[i]) {
+          // TODO: split the 'all' cases into their own type!
           case 'ALL': // special-use
           case 'ALLMAIL': // xlist
           case 'ARCHIVE': // special-use
@@ -3806,6 +3815,7 @@ ImapAccount.prototype = {
 
   runOp: $acctmixins.runOp,
   getFirstFolderWithType: $acctmixins.getFirstFolderWithType,
+  getFolderByPath: $acctmixins.getFolderByPath,
 };
 
 /**
@@ -4251,8 +4261,8 @@ CompositeAccount.prototype = {
     this._enabled = this._receivePiece.enabled = val;
   },
 
-  saveAccountState: function(reuseTrans) {
-    return this._receivePiece.saveAccountState(reuseTrans);
+  saveAccountState: function(reuseTrans, callback, reason) {
+    return this._receivePiece.saveAccountState(reuseTrans, callback, reason);
   },
 
   /**
@@ -4384,6 +4394,8 @@ exports.configurator = {
         hostname: domainInfo.incoming.hostname,
         port: domainInfo.incoming.port,
         crypto: domainInfo.incoming.socketType === 'SSL',
+
+        blacklistedCapabilities: null,
       };
       smtpConnInfo = {
         hostname: domainInfo.outgoing.hostname,
@@ -4398,11 +4410,17 @@ exports.configurator = {
       function probesDone(results) {
         // -- both good?
         if (results.imap[0] === null && results.smtp[0] === null) {
+          var imapConn = results.imap[1],
+              imapTZOffset = results.imap[2],
+              imapBlacklistedCapabilities = results.imap[3];
+
+          imapConnInfo.blacklistedCapabilities = imapBlacklistedCapabilities;
+
           var account = self._defineImapAccount(
             universe,
             userDetails, credentials,
-            imapConnInfo, smtpConnInfo, results.imap[1],
-            results.imap[2],
+            imapConnInfo, smtpConnInfo, imapConn,
+            imapTZOffset,
             callback);
         }
         // -- either/both bad
@@ -4455,6 +4473,9 @@ exports.configurator = {
         hostname: oldAccountDef.receiveConnInfo.hostname,
         port: oldAccountDef.receiveConnInfo.port,
         crypto: oldAccountDef.receiveConnInfo.crypto,
+
+        blacklistedCapabilities:
+          oldAccountDef.receiveConnInfo.blacklistedCapabilities || null,
       },
       sendConnInfo: {
         hostname: oldAccountDef.sendConnInfo.hostname,
