@@ -30,7 +30,7 @@ html {
 body {
   background: url(images/document_bg.png);
   color: #fff;
-  font-family: "MozTT", sans-serif;
+  font-family: sans-serif;
   font-size: 10px;
   height: 100%;
   width: 100%;
@@ -103,6 +103,7 @@ footer {
   background-image: url(images/div_line_left.png), url(images/div_line_right.png);
   background-repeat: no-repeat;
   background-position: left, right;
+  background-size: 0.2rem, 0.2rem;
 }
 
 .toolbarButton.zoomOut {

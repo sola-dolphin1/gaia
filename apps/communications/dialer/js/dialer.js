@@ -16,15 +16,15 @@ var CallHandler = (function callHandler() {
   window.addEventListener('load', function getSettingsListener() {
     window.removeEventListener('load', getSettingsListener);
 
-    loader.load('/shared/js/settings_listener.js', function() {
-      SettingsListener.observe('lockscreen.locked', null, function(value) {
-        if (value) {
-          screenState = 'locked';
-        } else {
-          screenState = 'unlocked';
-        }
+      loader.load('/shared/js/settings_listener.js', function() {
+        SettingsListener.observe('lockscreen.locked', null, function(value) {
+          if (value) {
+            screenState = 'locked';
+          } else {
+            screenState = 'unlocked';
+          }
+        });
       });
-    });
   });
 
   /* === WebActivity === */
@@ -123,7 +123,7 @@ var CallHandler = (function callHandler() {
   /* === Recents support === */
   function handleRecentAddRequest(entry) {
     CallLogDBManager.add(entry, function(logGroup) {
-      CallLog.appendGroup(logGroup, entry.contactInfo);
+      CallLog.appendGroup(logGroup);
     });
   }
 
@@ -171,7 +171,7 @@ var CallHandler = (function callHandler() {
       if (command[3] === '>') {
         var pos = parseInt(command.substring(4), 10);
 
-        CallLogDBManager.getGroupAtIndex(pos, 'lastEntryDate', true, null,
+        CallLogDBManager.getGroupAtPosition(pos, 'lastEntryDate', true, null,
           function(result) {
             if (result && (typeof result === 'object') && result.number) {
               CallHandler.call(result.number);
@@ -299,16 +299,19 @@ var CallHandler = (function callHandler() {
   // where we want to open a new call screen while the previous one is
   // animating out of the screen.
   var callScreenId = 0;
+  var openingWindow = false;
   function openCallScreen(openCallback) {
-    if (callScreenWindow)
+    if (callScreenWindow || openingWindow)
       return;
 
+    openingWindow = true;
     var host = document.location.host;
     var protocol = document.location.protocol;
     var urlBase = protocol + '//' + host + '/dialer/oncall.html';
 
     var highPriorityWakeLock = navigator.requestWakeLock('high-priority');
     var openWindow = function dialer_openCallScreen(state) {
+      openingWindow = false;
       callScreenWindow = window.open(urlBase + '#' + state,
                   ('call_screen' + callScreenId++), 'attention');
 

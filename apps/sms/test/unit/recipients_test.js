@@ -39,6 +39,11 @@ suite('Recipients', function() {
 
     mocksHelper.setup();
 
+    this.sinon.spy(Recipients.prototype, 'render');
+    this.sinon.spy(Recipients.View.prototype, 'render');
+    this.sinon.spy(Recipients.View.prototype, 'visible');
+    this.sinon.spy(Element.prototype, 'scrollIntoView');
+
     recipients = new Recipients({
       outer: 'messages-to-field',
       inner: 'messages-recipients-list',
@@ -52,8 +57,11 @@ suite('Recipients', function() {
       source: 'none',
       // Mapped to node attr, not true boolean
       editable: 'true',
-      // Disambiguation 'display' attribute
-      display: 'Type | Carrier, Number'
+
+      // Disambiguation 'display' attributes
+      type: 'Type',
+      separator: ' | ',
+      carrier: 'Carrier'
     };
   });
 
@@ -130,9 +138,20 @@ suite('Recipients', function() {
       assert.deepEqual(recipient, fixture);
       assert.ok(isValid(recipient, '999'));
 
-
       recipients.remove(recipient);
       assert.equal(recipients.length, 0);
+
+      assert.ok(recipients.render.calledTwice);
+    });
+
+    test('recipients.remove(nonexistant) ', function() {
+      var recipient;
+
+      recipients.add(fixture);
+      recipients.remove(null);
+      assert.equal(recipients.length, 1);
+
+      assert.ok(recipients.render.calledOnce);
     });
 
     test('recipients.remove(index) ', function() {
@@ -464,58 +483,253 @@ suite('Recipients', function() {
 
       assert.equal(view.firstElementChild, view.lastElementChild);
     });
-  });
 
-  suite('Recipients.View.prompts', function() {
+    suite('Interaction', function() {
 
-    test('Recipients.View.prompts ', function() {
-      assert.ok(Recipients.View.prompts);
+      suite('Clicks on accepted recipients', function() {
+
+        test('while manually entering a recipient ', function() {
+          var view = document.getElementById('messages-recipients-list');
+
+          fixture.source = 'contacts';
+
+          recipients.add(fixture).focus();
+
+          // A recipient is accepted
+          assert.equal(recipients.length, 1);
+
+          // The recipient list contains:
+          //
+          //    - A rendered recipient
+          //    - A placeholder for the cursor
+          //
+          assert.equal(view.children.length, 2);
+
+          // Simulated manual entry of an unknown recipient
+          // (ie. not a stored contact)
+          view.lastElementChild.textContent = '999';
+          view.firstElementChild.click();
+
+          // A recipient is accepted
+          assert.equal(recipients.length, 2);
+
+          // The recipient list contains:
+          //
+          //    - Two rendered recipients
+          //    - A placeholder for the cursor
+          //
+          assert.equal(view.children.length, 3);
+        });
+
+        test('with only accepted recipients ', function() {
+          var view = document.getElementById('messages-recipients-list');
+
+          fixture.source = 'contacts';
+
+          recipients.add(fixture).focus();
+
+          // A recipient is accepted
+          assert.equal(recipients.length, 1);
+
+          // The recipient list contains:
+          //
+          //    - A rendered recipient
+          //    - A placeholder for the cursor
+          //
+          assert.equal(view.children.length, 2);
+
+          view.firstElementChild.click();
+
+          // No changes
+          assert.equal(recipients.length, 1);
+          assert.equal(view.children.length, 2);
+        });
+
+        test('with no placeholder at end of list ', function() {
+          var view = document.getElementById('messages-recipients-list');
+
+          fixture.source = 'contacts';
+
+          recipients.add(fixture).focus();
+
+          // A recipient is accepted
+          assert.equal(recipients.length, 1);
+
+          // The recipient list contains:
+          //
+          //    - A rendered recipient
+          //    - A placeholder for the cursor
+          //
+          assert.equal(view.children.length, 2);
+
+          // Remove the placeholder
+          view.removeChild(view.lastElementChild);
+
+          // Confirm the placeholder has been removed.
+          assert.equal(view.children.length, 1);
+
+          view.firstElementChild.click();
+
+          // No changes
+          assert.equal(recipients.length, 1);
+          assert.equal(view.children.length, 1);
+        });
+
+        test('focusing with no placeholder at the end add one', function() {
+          var view = document.getElementById('messages-recipients-list');
+
+          fixture.source = 'contacts';
+
+          recipients.add(fixture).focus();
+
+          // Remove the placeholder
+          view.removeChild(view.lastElementChild);
+
+          // focus on the view
+          view.click();
+
+          // assert a placeholder has been added and is focused
+          assert.equal(view.children.length, 2);
+          assert.isTrue(view.lastElementChild.isPlaceholder);
+          assert.equal(view.lastElementChild.contentEditable, 'true');
+        });
+      });
     });
 
-    suite('Recipients.View.prompts.remove ', function() {
-      var recipient;
+    suite('Prompts', function() {
+
+      test('Recipients.View.prompts ', function() {
+        assert.ok(Recipients.View.prompts);
+      });
+
+      suite('Recipients.View.prompts.remove ', function() {
+        var recipient;
+
+        setup(function() {
+          // This simulates a recipient object
+          // as it would exist in the recipient data array.
+          //
+          // The values MUST be strings.
+          recipient = {
+            display: 'Mobile | Telco, 101',
+            editable: 'false',
+            email: '',
+            name: 'Alan Turing',
+            number: '101',
+            source: 'contacts'
+          };
+        });
+
+        test('Recipients.View.prompts.remove ', function() {
+          assert.ok(Recipients.View.prompts.remove);
+        });
+
+        test('cancel ', function(done) {
+
+          Recipients.View.prompts.remove(recipient, function(response) {
+            assert.ok(MockDialog.triggers.cancel.called);
+            assert.isFalse(MockDialog.triggers.confirm.called);
+            assert.isFalse(response.isConfirmed);
+            done();
+          });
+
+          MockDialog.triggers.cancel();
+        });
+
+        test('remove ', function(done) {
+
+          Recipients.View.prompts.remove(recipient, function(response) {
+            assert.ok(MockDialog.triggers.confirm.called);
+            assert.isFalse(MockDialog.triggers.cancel.called);
+            assert.ok(response.isConfirmed);
+            done();
+          });
+
+          MockDialog.triggers.confirm();
+        });
+      });
+    });
+
+    suite('Visibility Modes', function() {
+      var outer, inner, target, visible;
 
       setup(function() {
-        // This simulates a recipient object
-        // as it would exist in the recipient data array.
-        //
-        // The values MUST be strings.
-        recipient = {
-          display: 'Mobile | Telco, 101',
-          editable: 'false',
-          email: '',
-          name: 'Alan Turing',
-          number: '101',
-          source: 'contacts'
-        };
+        location.hash = '#new';
+
+        outer = document.getElementById('messages-to-field');
+        inner = document.getElementById('messages-recipients-list');
+        target = document.createElement('input');
+        visible = Recipients.View.prototype.visible;
+
+        this.sinon.spy(target, 'focus');
       });
 
-      test('Recipients.View.prompts.remove ', function() {
-        assert.ok(Recipients.View.prompts.remove);
+      teardown(function() {
+        location.hash = '';
       });
 
-      test('cancel ', function(done) {
+      suite('to singleline ', function() {
+        setup(function() {
+          recipients.visible('multiline');
+        });
+        test('singleline ', function() {
+          // Assert the last state is multiline
+          assert.equal(visible.args[0][0], 'multiline');
 
-        Recipients.View.prompts.remove(recipient, function(response) {
-          assert.ok(MockDialog.triggers.cancel.called);
-          assert.ok(!MockDialog.triggers.confirm.called);
-          assert.ok(!response.isConfirmed);
-          done();
+          // Next, set back to singleline
+          recipients.visible('singleline');
+
+          assert.ok(visible.called);
+          assert.equal(visible.args[1][0], 'singleline');
         });
 
-        MockDialog.triggers.cancel();
+        test('singleline + refocus ', function() {
+          // Assert the last state is multiline
+          assert.equal(visible.args[0][0], 'multiline');
+
+          outer.addEventListener('transitionend', function handler() {
+            var last = inner.lastElementChild;
+
+            assert.ok(target.focus.called);
+            assert.ok(visible.called);
+            assert.equal(visible.args[0][0], 'singleline');
+            assert.deepEqual(visible.args[0][1], {
+              refocus: target
+            });
+
+            assert.ok(target.focus.called);
+            assert.ok(last.scrollIntoView.called);
+
+            done();
+
+            outer.removeEventListener('transitionend', handler);
+          });
+
+          recipients.visible('singleline', {
+            refocus: target
+          });
+
+          outer.dispatchEvent(
+            new CustomEvent('transitionend')
+          );
+        });
       });
 
-      test('remove ', function(done) {
-
-        Recipients.View.prompts.remove(recipient, function(response) {
-          assert.ok(MockDialog.triggers.confirm.called);
-          assert.ok(!MockDialog.triggers.cancel.called);
-          assert.ok(response.isConfirmed);
-          done();
+      suite('to multiline ', function() {
+        setup(function() {
+          recipients.visible('singleline');
         });
 
-        MockDialog.triggers.confirm();
+        test('multiline ', function() {
+          // Assert the last state is singleline
+          assert.equal(visible.args[0][0], 'singleline');
+
+          // Next, set back to multiline
+          recipients.visible('multiline');
+
+          assert.ok(visible.called);
+          assert.equal(visible.args[1][0], 'multiline');
+        });
       });
     });
   });

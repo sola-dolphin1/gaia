@@ -12,6 +12,7 @@ var icc = {
   init: function icc_init() {
     this._icc = this.getICC();
     this.hideViews();
+    this.protectForms();
     this.getIccInfo();
     var self = this;
     this.clearMenuCache(function() {
@@ -127,6 +128,36 @@ var icc = {
     this.responseSTKCommand({
       resultCode: this._icc.STK_RESULT_BACKWARD_MOVE_BY_USER
     });
+  },
+
+  /**
+   * Protect forms from reloading system app
+   */
+  protectForms: function() {
+    var protect = function(event) {
+      if (!event) {
+        return;
+      }
+
+      event.preventDefault();
+    };
+
+    // Prevents from reloading the system app when
+    // the user taps on the Enter key
+    var iccView = document.getElementById('icc-view');
+    if (!iccView) {
+      return;
+    }
+
+    var forms = iccView.getElementsByTagName('form');
+    if (!forms) {
+      return;
+    }
+
+    for (var i = 0; i < forms.length; i++) {
+      var form = forms[i];
+      form.onsubmit = protect;
+    }
   },
 
   /******************************************
@@ -328,12 +359,13 @@ var icc = {
     if (!options.isYesNoRequired && !options.isYesNoRequested) {
       this.icc_input.classList.remove('yesnomode');
 
-      this.icc_input_box.maxLength = options.maxLength;
+      // Workaround. See bug #818270. Followup: #895314
+      setTimeout(function workaround_bug818270() {
+        self.icc_input_box.maxLength = options.maxLength;
+      });
       this.icc_input_box.placeholder = message;
       this.icc_input_box.type = options.isAlphabet ? 'text' : 'tel';
-      if (options.defaultText) {
-        this.icc_input_box.value = options.defaultText;
-      }
+      this.icc_input_box.value = options.defaultText || '';
       if (options.hideInput) {
         this.icc_input_box.type = 'password';
       }
@@ -352,6 +384,9 @@ var icc = {
         self.icc_input_btn.disabled = !checkInputLengthValid(
           self.icc_input_box.value.length, options.minLength,
           options.maxLength);
+        if (self.icc_input_box.value.length == options.maxLength) {
+          self.icc_input_btn.focus();
+        }
       };
       this.icc_input_btn.onclick = function() {
         clearTimeout(timeoutId);
@@ -374,6 +409,7 @@ var icc = {
       };
     }
 
+    this.icc_input_box.value = '';
     this.icc_input_msg.textContent = message;
     this.icc_input.classList.add('visible');
     this.icc_view.classList.add('visible');

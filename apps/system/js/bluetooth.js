@@ -4,14 +4,44 @@
 'use strict';
 
 var Bluetooth = {
+  get Profiles() {
+    return {
+      HFPHSP: 'hfpHsp', // Hands-Free Profile / Headset Profile
+      OPP: 'opp',       // Object Push Profile
+      SCO: 'sco'        // Synchronous Connection-Oriented
+    };
+  },
+
+  _setProfileConnected: function bt_setProfileConnected(profile, connected) {
+    this['_' + profile + 'Connected'] = connected;
+  },
+
+  getCurrentProfiles: function bt_getCurrentProfiles() {
+    var profiles = this.Profiles;
+    var connectedProfiles = [];
+    for (var name in profiles) {
+      var profile = profiles[name];
+      if (this.isProfileConnected(profile)) {
+        connectedProfiles.push(profile);
+      }
+    }
+    return connectedProfiles;
+  },
+
+  isProfileConnected: function bt_isProfileConnected(profile) {
+    var isConnected = this['_' + profile + 'Connected'];
+    if (isConnected === undefined) {
+      return false;
+    } else {
+      return isConnected;
+    }
+  },
 
   /* this property store a reference of the default adapter */
   defaultAdapter: null,
 
   /* keep a global connected property here */
   connected: false,
-  hfpHspConnected: false,
-  oppConnected: false,
 
   init: function bt_init() {
     if (!window.navigator.mozSettings)
@@ -20,6 +50,7 @@ var Bluetooth = {
     if (!window.navigator.mozBluetooth)
       return;
 
+    var telephony = window.navigator.mozTelephony;
     var bluetooth = window.navigator.mozBluetooth;
     var settings = window.navigator.mozSettings;
     var self = this;
@@ -42,7 +73,9 @@ var Bluetooth = {
     if (settings) {
       settings.addObserver('telephony.speaker.enabled',
         function bt_onSpeakerEnabledChange(event) {
-          if (self.defaultAdapter && self.hfpHspConnected) {
+          if (self.defaultAdapter &&
+              self.isProfileConnected(self.Profiles.HFPHSP) &&
+              telephony.active) {
             if (event.settingValue) {
               self.defaultAdapter.disconnectSco();
             } else {
@@ -72,21 +105,6 @@ var Bluetooth = {
       window.dispatchEvent(evt);
     };
 
-    /* for v1, we only support two use cases for bluetooth connection:
-     *   1. connecting with a headset
-     *   2. transfering a file to/from another device
-     * So we need to monitor their event messages to know we are (aren't)
-     * connected, then summarize to an event and dispatch to StatusBar
-     */
-
-    // In headset connected case:
-    navigator.mozSetMessageHandler('bluetooth-hfp-status-changed',
-      function bt_hfpStatusChanged(message) {
-        self.hfpHspConnected = message.connected;
-        self.updateConnected();
-      }
-    );
-
     /* In file transfering case:
      * since System Message can't be listened in two js files within a app,
      * so we listen here but dispatch events to bluetooth_transfer.js
@@ -94,7 +112,7 @@ var Bluetooth = {
      */
     navigator.mozSetMessageHandler('bluetooth-opp-transfer-start',
       function bt_fileTransferUpdate(transferInfo) {
-        self.oppConnected = true;
+        self._setProfileConnected(self.Profiles.OPP, true);
         self.updateConnected();
         var evt = document.createEvent('CustomEvent');
         evt.initCustomEvent('bluetooth-opp-transfer-start',
@@ -106,7 +124,7 @@ var Bluetooth = {
 
     navigator.mozSetMessageHandler('bluetooth-opp-transfer-complete',
       function bt_fileTransferUpdate(transferInfo) {
-        self.oppConnected = false;
+        self._setProfileConnected(self.Profiles.OPP, false);
         self.updateConnected();
         var evt = document.createEvent('CustomEvent');
         evt.initCustomEvent('bluetooth-opp-transfer-complete',
@@ -115,7 +133,6 @@ var Bluetooth = {
         window.dispatchEvent(evt);
       }
     );
-
   },
 
   // Get adapter for BluetoothTransfer when everytime bluetooth is enabled
@@ -130,6 +147,27 @@ var Bluetooth = {
     var req = bluetooth.getDefaultAdapter();
     req.onsuccess = function bt_gotDefaultAdapter(evt) {
       self.defaultAdapter = req.result;
+      self.initWithAdapter(self.defaultAdapter);
+    };
+  },
+
+  initWithAdapter: function bt_initWithAdapter(adapter) {
+    /* for v1, we only support two use cases for bluetooth connection:
+     *   1. connecting with a headset
+     *   2. transfering a file to/from another device
+     * So we need to listen to corresponding events to know we are (aren't)
+     * connected, then summarize to an event and dispatch to StatusBar
+     */
+
+    // In headset connected case:
+    var self = this;
+    adapter.onhfpstatuschanged = function bt_hfpStatusChanged(evt) {
+      self._setProfileConnected(self.Profiles.HFPHSP, evt.status);
+      self.updateConnected();
+    };
+
+    adapter.onscostatuschanged = function bt_scoStatusChanged(evt) {
+      self._setProfileConnected(self.Profiles.SCO, evt.status);
     };
   },
 
@@ -140,7 +178,8 @@ var Bluetooth = {
       return;
 
     var wasConnected = this.connected;
-    this.connected = this.hfpHspConnected || this.oppConnected;
+    this.connected = this.isProfileConnected(this.Profiles.HFPHSP) ||
+                     this.isProfileConnected(this.Profiles.OPP);
 
     if (wasConnected !== this.connected) {
       var evt = document.createEvent('CustomEvent');

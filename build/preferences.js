@@ -25,6 +25,11 @@ prefs.push(["network.http.max-connections-per-server", 15]);
 
 // for https://bugzilla.mozilla.org/show_bug.cgi?id=811605 to let user know what prefs is for ril debugging
 prefs.push(["ril.debugging.enabled", false]);
+// Gaia has no vCard/vCalendar for now. Override MMS version to v1.1:
+// TODO: remove this override after having vCard/vCalendar implemented in Gaia.
+// @see bug 885683 - [Messages] MMS doesn't support sending and receiving vCard attachments.
+// @see bug 905548 - [Messages] MMS doesn't support sending and receiving vCalendar attachments.
+prefs.push(["dom.mms.version", 0x11]);
 
 if (LOCAL_DOMAINS) {
   prefs.push(["network.dns.localDomains", domains.join(",")]);
@@ -96,8 +101,8 @@ if (DEBUG) {
 
   prefs.push(["javascript.options.showInConsole", true]);
   prefs.push(["browser.dom.window.dump.enabled", true]);
-  prefs.push(["javascript.options.strict", true]);
   prefs.push(["dom.report_all_js_exceptions", true]);
+  prefs.push(["dom.w3c_touch_events.enabled", 1]);
   prefs.push(["webgl.verbose", true]);
 
   // Turn off unresponsive script dialogs so test-agent can keep running...
@@ -117,7 +122,7 @@ if (DEBUG) {
   prefs.push(["extensions.gaia.dir", GAIA_DIR]);
   prefs.push(["extensions.gaia.domain", GAIA_DOMAIN]);
   prefs.push(["extensions.gaia.port", parseInt(GAIA_PORT.replace(/:/g, ""))]);
-  prefs.push(["extensions.gaia.app_src_dirs", GAIA_APP_SRCDIRS]);
+  prefs.push(["extensions.gaia.appdirs", GAIA_APPDIRS]);
   prefs.push(["extensions.gaia.locales_debug_path", GAIA_LOCALES_PATH]);
   prefs.push(["extensions.gaia.official", Boolean(OFFICIAL)]);
 
@@ -137,6 +142,13 @@ if (DEBUG) {
 // in both debug and browser compatibility modes
 if (DEBUG || DESKTOP) {
   prefs.push(["extensions.autoDisableScopes", 0]);
+}
+
+if (DEVICE_DEBUG) {
+  // Bug 832000: Until unix domain socket are implemented, force enable content
+  // actor
+  prefs.push(["devtools.debugger.enable-content-actors", true]);
+  prefs.push(["devtools.debugger.prompt-connection", false]);
 }
 
 function writePrefs() {

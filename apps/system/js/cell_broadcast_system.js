@@ -5,6 +5,8 @@ var CellBroadcastSystem = {
   _settingsDisabled: null,
   _settingsKey: 'ril.cellbroadcast.disabled',
   _sound: 'style/notifications/ringtones/notifier_exclamation.ogg',
+  // A random starting point that is unlikely to be used by other notifications
+  _notificationId: 6000 + Math.floor(Math.random() * 999),
 
   init: function cbs_init() {
     var self = this;
@@ -24,11 +26,19 @@ var CellBroadcastSystem = {
 
   settingsChangedHandler: function cbs_settingsChangedHandler(event) {
     this._settingsDisabled = event.settingValue;
+
+    if (this._settingsDisabled) {
+      LockScreen.setCellbroadcastLabel();
+    }
   },
 
   show: function cbs_show(event) {
     var conn = window.navigator.mozMobileConnection;
     var msg = event.message;
+
+    if (this._settingsDisabled) {
+      return;
+    }
 
     if (conn &&
         conn.voice.network.mcc === MobileOperator.BRAZIL_MCC &&
@@ -37,11 +47,7 @@ var CellBroadcastSystem = {
       return;
     }
 
-    if (this._settingsDisabled) {
-      return;
-    }
-
-    var title = navigator.mozL10n.get('system-alert');
+    var title = navigator.mozL10n.get('cb-channel', {channel: msg.messageId});
     var showDialog = function() {
       ModalDialog.showWithPseudoEvent({
         title: title,
@@ -62,6 +68,7 @@ var CellBroadcastSystem = {
     // If we are on the lock screen then create a notification
     // that invokes the dialog
     var notification = NotificationScreen.addNotification({
+      id: ++this._notificationId,
       title: title,
       text: msg.body
     });

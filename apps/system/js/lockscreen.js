@@ -145,9 +145,15 @@ var LockScreen = {
     window.addEventListener('screenchange', this);
     document.addEventListener('visibilitychange', this);
 
+    /* Telephony changes */
+    if (navigator.mozTelephony) {
+      navigator.mozTelephony.addEventListener('callschanged', this);
+    }
+
     /* Gesture */
     this.area.addEventListener('touchstart', this);
     this.areaCamera.addEventListener('touchstart', this);
+    this.altCamera.addEventListener('touchstart', this);
     this.areaUnlock.addEventListener('touchstart', this);
     this.iconContainer.addEventListener('touchstart', this);
 
@@ -213,10 +219,12 @@ var LockScreen = {
       }
     });
 
+    var wallpaperURL = new SettingsURL();
+
     SettingsListener.observe('',
                              '',
                              function(value) {
-                               self.updateBackground(value);
+                               self.updateBackground(wallpaperURL.set(value));
                                self.overlay.classList.remove('uninit');
                              });
 
@@ -325,6 +333,11 @@ var LockScreen = {
   handleEvent: function ls_handleEvent(evt) {
     switch (evt.type) {
       case 'screenchange':
+        // Don't lock if screen is turned off by promixity sensor.
+        if (evt.detail.screenOffBy == 'proximity') {
+          break;
+        }
+
         // XXX: If the screen is not turned off by ScreenManager
         // we would need to lock the screen again
         // when it's being turned back on
@@ -369,6 +382,7 @@ var LockScreen = {
       case 'cardstatechange':
       case 'iccinfochange':
         this.updateConnState();
+        break;
 
       case 'click':
         if (!evt.target.dataset.key)
@@ -381,7 +395,8 @@ var LockScreen = {
 
       case 'touchstart':
         if (evt.target === this.areaUnlock ||
-           evt.target === this.areaCamera) {
+           evt.target === this.areaCamera ||
+           evt.target === this.altCamera) {
           evt.preventDefault();
           this.handleIconClick(evt.target);
           break;
@@ -475,6 +490,15 @@ var LockScreen = {
         evt.stopImmediatePropagation();
         evt.stopPropagation();
         break;
+
+      case 'callschanged':
+        var emergencyCallBtn = this.passcodePad.querySelector('a[data-key=e]');
+        if (!!navigator.mozTelephony.calls.length) {
+          emergencyCallBtn.classList.add('disabled');
+        } else {
+          emergencyCallBtn.classList.remove('disabled');
+        }
+        break;
     }
   },
 
@@ -543,6 +567,7 @@ var LockScreen = {
     var self = this;
     switch (target) {
       case this.areaCamera:
+      case this.altCamera:
         var panelOrFullApp = function panelOrFullApp() {
           // If the passcode is enabled and it has a timeout which has passed
           // switch to secure camera

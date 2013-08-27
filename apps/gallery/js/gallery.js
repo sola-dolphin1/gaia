@@ -142,6 +142,18 @@ function init() {
   // Clicking on the share button in select mode shares all selected images
   $('thumbnails-share-button').onclick = shareSelectedItems;
 
+  // Click to open the media storage panel when the default storage
+  // is unavailable.
+  $('storage-setting-button').onclick = function() {
+    var activity = new MozActivity({
+      name: 'configure',
+      data: {
+        target: 'device',
+        section: 'mediaStorage'
+      }
+    });
+  };
+
   // Handle resize events
   window.onresize = resizeHandler;
 
@@ -220,6 +232,11 @@ function initDB() {
     });
   }
 
+  // show dialog in upgradestart, when it finished, it will turned to ready.
+  photodb.onupgrading = function(evt) {
+    showOverlay('upgrade');
+  };
+
   // This is called when DeviceStorage becomes unavailable because the
   // sd card is removed or because it is mounted for USB mass storage
   // This may be called before onready if it is unavailable to begin with
@@ -247,7 +264,8 @@ function initDB() {
 
   photodb.onready = function() {
     // Hide the nocard or pluggedin overlay if it is displayed
-    if (currentOverlay === 'nocard' || currentOverlay === 'pluggedin')
+    if (currentOverlay === 'nocard' || currentOverlay === 'pluggedin' ||
+        currentOverlay === 'upgrade')
       showOverlay(null);
 
     initThumbnails();
@@ -745,6 +763,8 @@ function cropPickedImage(fileinfo) {
   photodb.getFile(pickedFile.name, function(file) {
     cropURL = URL.createObjectURL(file);
     cropEditor = new ImageEditor(cropURL, $('crop-frame'), {}, function() {
+      // Enable the done button so that users are able to finish picking image.
+      $('crop-done-button').disabled = false;
       // If the initiating app doesn't want to allow the user to crop
       // the image, we don't display the crop overlay. But we still use
       // this image editor to preview the image.
@@ -762,9 +782,6 @@ function cropPickedImage(fileinfo) {
         cropEditor.setCropAspectRatio(pickWidth, pickHeight);
       else
         cropEditor.setCropAspectRatio(); // free form cropping
-
-      // Enable the done button so that users are able to finish picking image.
-      $('crop-done-button').disabled = false;
     });
   });
 }
@@ -1120,38 +1137,49 @@ var currentOverlay;  // The id of the current overlay or null if none.
 // suffixes.
 //
 function showOverlay(id) {
-  currentOverlay = id;
+  LazyLoader.load('shared/style/confirm.css', function() {
+    currentOverlay = id;
 
-  var title, text;
+    if (currentOverlay === 'nocard') {
+      $('overlay-menu').classList.remove('hidden');
+    } else {
+      $('overlay-menu').classList.add('hidden');
+    }
 
-  switch (currentOverlay) {
-    case null:
-      $('overlay').classList.add('hidden');
-      return;
-    case 'nocard':
-      title = navigator.mozL10n.get('nocard2-title');
-      text = navigator.mozL10n.get('nocard2-text');
-      break;
-    case 'pluggedin':
-      title = navigator.mozL10n.get('pluggedin2-title');
-      text = navigator.mozL10n.get('pluggedin2-text');
-      break;
-    case 'scanning':
-      title = navigator.mozL10n.get('scanning-title');
-      text = navigator.mozL10n.get('scanning-text');
-      break;
-    case 'emptygallery':
-      title = navigator.mozL10n.get('emptygallery2-title');
-      text = navigator.mozL10n.get('emptygallery2-text');
-      break;
-    default:
-      console.warn('Reference to undefined overlay', currentOverlay);
-      return;
-  }
+    var title, text;
+    switch (currentOverlay) {
+      case null:
+        $('overlay').classList.add('hidden');
+        return;
+      case 'nocard':
+        title = navigator.mozL10n.get('nocard3-title');
+        text = navigator.mozL10n.get('nocard3-text');
+        break;
+      case 'pluggedin':
+        title = navigator.mozL10n.get('pluggedin2-title');
+        text = navigator.mozL10n.get('pluggedin2-text');
+        break;
+      case 'scanning':
+        title = navigator.mozL10n.get('scanning-title');
+        text = navigator.mozL10n.get('scanning-text');
+        break;
+      case 'emptygallery':
+        title = navigator.mozL10n.get('emptygallery2-title');
+        text = navigator.mozL10n.get('emptygallery2-text');
+        break;
+      case 'upgrade':
+        title = navigator.mozL10n.get('upgrade-title');
+        text = navigator.mozL10n.get('upgrade-text');
+        break;
+      default:
+        console.warn('Reference to undefined overlay', currentOverlay);
+        return;
+    }
 
-  $('overlay-title').textContent = title;
-  $('overlay-text').textContent = text;
-  $('overlay').classList.remove('hidden');
+    $('overlay-title').textContent = title;
+    $('overlay-text').textContent = text;
+    $('overlay').classList.remove('hidden');
+  });
 }
 
 // XXX

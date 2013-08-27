@@ -1,8 +1,12 @@
+'use strict';
+
 var contacts = window.contacts || {};
 
 contacts.Matcher = (function() {
-  var selfContactId;
-  var incomingContact;
+  var blankRegExp = /\s+/g;
+
+  var FB_CATEGORY = 'facebook';
+  var FB_LINKED = 'fb_linked';
 
   // Multiple matcher Object. It tries to find a set of Contacts that match at
   // least one of the targets passed as parameters
@@ -29,12 +33,14 @@ contacts.Matcher = (function() {
       var req = navigator.mozContacts.find(options);
 
       req.onsuccess = function() {
-        var matchings = req.result;
+        var matchings = req.result.filter(function(aResult) {
+          return filterFacebook(aResult, matchingOptions.linkParams);
+        });
 
         var filterBy = options.filterBy;
 
         matchings.forEach(function(aMatching) {
-          if (selfContactId === aMatching.id) {
+          if (matchingOptions.selfContactId === aMatching.id) {
             return;
           }
 
@@ -42,7 +48,6 @@ contacts.Matcher = (function() {
           var matchedValue;
 
           values.forEach(function(aValue) {
-            var type = aValue.type;
             var value = aValue.value;
 
             if (value === target || value.indexOf(target) !== -1 ||
@@ -50,22 +55,29 @@ contacts.Matcher = (function() {
               matchedValue = value;
             }
 
-            finalMatchings[aMatching.id] = {
-              target: target,
-              fields: filterBy,
-              matchedValues: [matchedValue],
-              matchingContact: aMatching
-            };
-          });
-        });
+            var matchings, matchingObj;
+            if (!finalMatchings[aMatching.id]) {
+              matchingObj = {
+                matchings: {},
+                matchingContact: aMatching
+              };
+              finalMatchings[aMatching.id] = matchingObj;
+              matchingObj.matchings[filterBy[0]] = [];
+            }
+            else {
+              matchingObj = finalMatchings[aMatching.id];
+            }
 
-        if (Object.keys(finalMatchings).length > 0) {
-          notifyMatch(self, finalMatchings);
-        }
-        else {
-          notifyMismatch(self);
-        }
-      };
+            matchings = matchingObj.matchings[filterBy[0]];
+            matchings.push({
+              'target': target,
+              'matchedValue': matchedValue
+            });
+          });
+        });  // matchings.forEach
+
+        carryOn();
+      }; // onsuccess
 
       req.onerror = function(e) {
         window.console.error('Error while trying to do the matching',
@@ -111,19 +123,24 @@ contacts.Matcher = (function() {
 
   // Match a Contact by the field and filter specified as parameters
   // Callbacks is an object that declares onmatch and onmismatch callbacks
-  function matchBy(aContact, field, filterOper, callbacks) {
+  function matchBy(aContact, field, filterOper, callbacks, poptions) {
+    var options = poptions || {};
     var values = [];
 
     if (Array.isArray(aContact[field])) {
       aContact[field].forEach(function(aField) {
-        values.push(aField.value);
+        if (typeof aField.value === 'string') {
+          values.push(aField.value.trim());
+        }
       });
     }
 
     if (values.length > 0) {
       var matcher = new MultipleMatcher(values, {
         filterBy: [field],
-        filterOp: filterOper
+        filterOp: filterOper,
+        selfContactId: aContact.id,
+        linkParams: options
       });
       matcher.onmatch = callbacks.onmatch;
 
@@ -136,12 +153,12 @@ contacts.Matcher = (function() {
     }
   }
 
-  function matchByTel(aContact, callbacks) {
-    matchBy(aContact, 'tel', 'match', callbacks);
+  function matchByTel(aContact, callbacks, options) {
+    matchBy(aContact, 'tel', 'match', callbacks, options);
   }
 
-  function matchByEmail(aContact, callbacks) {
-    matchBy(aContact, 'email', 'equals', callbacks);
+  function matchByEmail(aContact, callbacks, options) {
+    matchBy(aContact, 'email', 'equals', callbacks, options);
   }
 
   // Performs a matching for an incoming contact 'aContact' and the mode
@@ -150,7 +167,7 @@ contacts.Matcher = (function() {
   // the matching process has finished
   function doMatch(aContact, mode, callbacks) {
     if (mode === 'passive') {
-      doMatchSilent(aContact, callbacks);
+      doMatchPassive(aContact, callbacks);
     }
     else if (mode === 'active') {
       doMatchActive(aContact, callbacks);
@@ -158,10 +175,7 @@ contacts.Matcher = (function() {
   }
 
   // Implements the active mode 'matching'
-  function doMatchActive(aContact, callbacks) {
-    incomingContact = aContact;
-    selfContactId = aContact.id;
-
+  function doMatchTelAndEmail(aContact, callbacks, options) {
     var localCbs = {
       onmatch: function(telMatches) {
         var matchCbs = {
@@ -173,9 +187,8 @@ contacts.Matcher = (function() {
                 allMatches[aMatch] = mailMatches[aMatch];
               }
               else {
-                allMatches[aMatch].fields.push('email');
-                allMatches[aMatch].matchedValues.push(
-                                        mailMatches[aMatch].matchedValues[0]);
+                allMatches[aMatch].matchings['email'] =
+                                        mailMatches[aMatch].matchings['email'];
               }
             });
             notifyMatch(callbacks, allMatches);
@@ -184,20 +197,17 @@ contacts.Matcher = (function() {
             notifyMatch(callbacks, telMatches);
           }
         };
-        matchByEmail(aContact, matchCbs);
+        matchByEmail(aContact, matchCbs, options);
       },
       onmismatch: function() {
-        matchByEmail(aContact, callbacks);
+        matchByEmail(aContact, callbacks, options);
       }
     };
-    matchByTel(aContact, localCbs);
+    matchByTel(aContact, localCbs, options);
   }
 
   // Implements the silent mode matching
-  function doMatchSilent(aContact, callbacks) {
-    incomingContact = aContact;
-    selfContactId = aContact.id;
-
+  function doMatchPassive(aContact, callbacks) {
     if (!hasName(aContact)) {
       notifyMismatch(callbacks);
       return;
@@ -205,12 +215,9 @@ contacts.Matcher = (function() {
 
     var matchingsFound = {};
 
-    var blankRegExp = /\s+/g;
-
     var localCbs = {
       onmatch: function(results) {
         // Results will contain contacts that match by tel or email
-        // Now a binary search is performed over givenName and lastName
         // Normalizing the strings
         var names = [];
         Object.keys(results).forEach(function(aResultId) {
@@ -222,26 +229,51 @@ contacts.Matcher = (function() {
 
           // As the number of candidates here will be short a normal search
           // will be conducted
+          var targetFN = null;
+          if (!isEmptyStr(aContact.familyName)) {
+            targetFN = Normalizer.toAscii(
+                          aContact.familyName[0].trim().toLowerCase()).
+                          replace(blankRegExp, '');
+          }
+          var targetGN = null;
+          if (!isEmptyStr(aContact.givenName)) {
+            targetGN = Normalizer.toAscii(
+                          aContact.givenName[0].trim().toLowerCase()).
+                          replace(blankRegExp, '');
+          }
+          // To support seamless matching of SIM contacts
+          var targetName = (targetGN || '') + (targetFN || '');
 
-          var targetFN = Normalizer.toAscii(
-                          incomingContact.familyName[0].trim().toLowerCase()).
+          var mFamilyName = null;
+          var mGivenName = null;
+
+          if (!isEmptyStr(mContact.familyName)) {
+            mFamilyName = Normalizer.toAscii(
+                                  mContact.familyName[0].trim().toLowerCase()).
                           replace(blankRegExp, '');
-          var targetGN = Normalizer.toAscii(
-                          incomingContact.givenName[0].trim().toLowerCase()).
+          }
+
+          if (!isEmptyStr(mContact.givenName)) {
+            mGivenName = Normalizer.toAscii(
+                                    mContact.givenName[0].trim().toLowerCase()).
                           replace(blankRegExp, '');
+          }
+          // To support seamless matching of SIM contacts
+          var mName = (mGivenName || '') + (mFamilyName || '');
 
           names.push({
             contact: mContact,
-            familyName: Normalizer.toAscii(
-                                  mContact.familyName[0].trim().toLowerCase()).
-                          replace(blankRegExp, ''),
-            givenName: Normalizer.toAscii(
-                                    mContact.givenName[0].trim().toLowerCase()).
-                          replace(blankRegExp, '')
+            familyName: mFamilyName,
+            givenName: mGivenName,
+            name: mName
           });
 
-          var matchingList = names.filter(function(x) {
-            return (x.familyName === targetFN && x.givenName === targetGN);
+          var matchingList = names.filter(function(obj) {
+            return ((obj.familyName === targetFN &&
+                     obj.givenName === targetGN) ||
+                    (obj.name && obj.name === targetName) && (
+                    !Array.isArray(obj.contact.category) ||
+                    obj.contact.category.indexOf(FB_CATEGORY) === -1));
           });
 
           matchingList.forEach(function(aMatching) {
@@ -252,7 +284,7 @@ contacts.Matcher = (function() {
           });
         });
 
-        reconcileResults(matchingsFound, results, callbacks);
+        reconcileResults(aContact, matchingsFound, results, callbacks);
       },
 
       onmismatch: function() {
@@ -261,7 +293,239 @@ contacts.Matcher = (function() {
     };
 
     // Matching by email and phone number, then match by names
-    doMatchActive(aContact, localCbs);
+    doMatchTelAndEmail(aContact, localCbs);
+  }
+
+  function doMatchActive(aContact, callbacks) {
+    var options = {
+      linkedMatched: {},
+      linkedTo: getLinkedTo(aContact)
+    };
+
+    var localCbs = {
+      onmatch: function(results) {
+        var cbsName = {
+          onmatch: function(nameResults) {
+            Object.keys(nameResults).forEach(function(aId) {
+              if (!results[aId]) {
+                results[aId] = nameResults[aId];
+              }
+              else {
+                results[aId].matchings['name']  =
+                                          nameResults[aId].matchings['name'];
+              }
+            });
+
+            notifyMatch(callbacks, results);
+          },
+          onmismatch: function() {
+            notifyMatch(callbacks, results);
+          }
+        };
+
+        matchByName(aContact, cbsName, options);
+      },
+      onmismatch: function() {
+        matchByName(aContact, callbacks, options);
+      }
+    };
+
+    // Matching by email and phone number, then match by names
+    doMatchTelAndEmail(aContact, localCbs, options);
+  }
+
+  function notifyFindNameReady() {
+    document.dispatchEvent(new CustomEvent('by_name_ready'));
+  }
+
+  // Used for the active mode. Performs matching by familyName and givenName
+  function matchByName(aContact, callbacks, options) {
+    // First we try to find by familyName
+    // Afterwards we search by givenName
+    var isSimContact = (Array.isArray(aContact.category) &&
+                        aContact.category.indexOf('sim') !== -1);
+
+    if ((isEmptyStr(aContact.familyName) || isEmptyStr(aContact.givenName)) &&
+       !isSimContact) {
+      notifyMismatch(callbacks);
+      return;
+    }
+
+    var finalResult = {};
+
+    var resultsByName = null;
+    if (!isEmptyStr(aContact.name)) {
+      var reqName = navigator.mozContacts.find({
+        filterValue: aContact.name[0].trim(),
+        filterBy: ['name'],
+        filterOp: 'equals'
+      });
+
+      reqName.onsuccess = function() {
+        resultsByName = reqName.result.filter(function(aResult) {
+          return filterFacebook(aResult, options);
+        });
+        notifyFindNameReady();
+        if (isEmptyStr(aContact.familyName)) {
+          processByNameEnd(finalResult, resultsByName, callbacks);
+        }
+      };
+
+      reqName.onerror = function(e) {
+        window.console.warn('Error while trying to find by name: ',
+                                e.target.error.name);
+        resultsByName = [];
+        notifyFindNameReady();
+        if (isEmptyStr(aContact.familyName)) {
+          processByNameEnd(finalResult, resultsByName, callbacks);
+        }
+      };
+    }
+    else {
+      resultsByName = [];
+      notifyFindNameReady();
+    }
+
+    if (!isEmptyStr(aContact.familyName)) {
+      var reqFamilyName = navigator.mozContacts.find({
+        filterValue: aContact.familyName[0].trim(),
+        filterBy: ['familyName'],
+        filterOp: 'equals'
+      });
+
+      reqFamilyName.onsuccess = function() {
+        var results = reqFamilyName.result;
+
+        var givenNames = [];
+        var targetGN = Normalizer.toAscii(
+                            aContact.givenName[0].trim().toLowerCase()).
+                            replace(blankRegExp, '');
+
+        results.forEach(function(mContact) {
+          if (mContact.id === aContact.id || isEmptyStr(mContact.givenName)) {
+            return;
+          }
+          givenNames.push({
+            contact: mContact,
+            givenName: Normalizer.toAscii(
+                         mContact.givenName[0].trim().toLowerCase()).
+                          replace(blankRegExp, '')
+          });
+        });
+
+        var finalMatchings = givenNames.filter(function(obj) {
+          var gn = obj.givenName;
+          return ((gn === targetGN || targetGN.startsWith(gn) ||
+                  gn.startsWith(targetGN)) &&
+                  filterFacebook(obj.contact, options));
+        });
+
+        finalMatchings.forEach(function(aMatching) {
+          finalResult[aMatching.contact.id] = {
+            matchings: {
+              'name': [{
+                target: '',
+                matchedValue: ''
+              }]
+            },
+            matchingContact: aMatching.contact
+          };
+        });
+
+        if (resultsByName) {
+          processByNameEnd(finalResult, resultsByName, callbacks);
+        }
+        else {
+          document.addEventListener('by_name_ready', function nameReady() {
+            document.removeEventListener('by_name_ready', nameReady);
+            processByNameEnd(finalResult, resultsByName, callbacks);
+          });
+        }
+      };
+
+      reqFamilyName.onerror = function(e) {
+        window.console.error('Error while trying to find by familyName: ',
+                             e.target.error.name);
+        notifyMismatch(callbacks);
+      };
+    }
+  }
+
+  function getLinkedTo(contact) {
+    var out = null;
+
+    if (Array.isArray(contact.category)) {
+      var idx = contact.category.indexOf(FB_LINKED);
+      if (idx !== -1) {
+        out = contact.category[idx + 1];
+      }
+    }
+    return out;
+  }
+
+  function isFbLinked(contact) {
+    return (Array.isArray(contact.category) &&
+                        contact.category.indexOf(FB_LINKED) !== -1);
+  }
+
+  function isFbContact(contact) {
+    return (Array.isArray(contact.category) &&
+                        contact.category.indexOf(FB_CATEGORY) !== -1);
+  }
+
+  function filterFacebook(contact, linkParams) {
+    var out = false;
+
+    if (!isFbContact(contact)) {
+      out = true;
+    }
+    else if (isFbLinked(contact)) {
+      var linkedTo = getLinkedTo(contact);
+      var targetUid = linkParams.linkedTo;
+      var linkedMatched = linkParams.linkedMatched;
+
+      if (targetUid === linkedTo) {
+        out = true;
+      }
+      // It is only allowed to match one linked contact or various but all of
+      // them linked to the same FB friend
+      else if ((Object.keys(linkedMatched).length === 0 ||
+               linkedMatched[linkedTo]) && !targetUid) {
+        linkedMatched[linkedTo] = linkedTo;
+        out = true;
+      }
+    }
+
+    return out;
+  }
+
+  function processByNameEnd(finalResult, resultsByName, callbacks) {
+    resultsByName.forEach(function(aResult) {
+      var matchingObj = {
+        matchings: {
+          'name': [{
+            // If target is the empty string then target === matchedValue
+            target: '',
+            matchedValue: aResult.name[0]
+          }]
+        },
+        matchingContact: aResult
+      };
+
+      if (!finalResult[aResult.id]) {
+        finalResult[aResult.id] = matchingObj;
+      }
+      else {
+        finalResult[aResult.id].matchings['name'] = matchingObj;
+      }
+    });
+
+    if (Object.keys(finalResult).length > 0) {
+      notifyMatch(callbacks, finalResult);
+    }
+    else {
+      notifyMismatch(callbacks);
+    }
   }
 
   function isEmpty(collection) {
@@ -269,24 +533,28 @@ contacts.Matcher = (function() {
                           collection[0].value && !collection[0].value.trim()));
   }
 
-  function hasName(aContact) {
-    return (Array.isArray(aContact.familyName) &&
-      Array.isArray(aContact.givenName) && aContact.familyName[0] &&
-      aContact.familyName[0].trim() && aContact.givenName[0] &&
-      aContact.givenName[0].trim());
+  function isEmptyStr(collection) {
+    return (!Array.isArray(collection) ||
+            !(typeof collection[0] === 'string') || !(collection[0].trim()));
   }
 
-  function reconcileResults(nameMatches, phoneMailMatches, callbacks) {
+  function hasName(aContact) {
+    return (!isEmptyStr(aContact.givenName) ||
+            !isEmptyStr(aContact.familyName));
+  }
+
+  function reconcileResults(incomingContact, nameMatches, phoneMailMatches,
+                            callbacks) {
     var finalMatchings = {};
 
     // Name matches drive all the process
     Object.keys(nameMatches).forEach(function(aNameMatching) {
       var matchingContact = nameMatches[aNameMatching].matchingContact;
 
-      var isPhoneMatching = phoneMailMatches[aNameMatching].
-                                          fields.indexOf('tel') !== -1;
-      var isMailMatching = phoneMailMatches[aNameMatching].
-                                          fields.indexOf('email') !== -1;
+      var isPhoneMatching = Array.isArray(phoneMailMatches[aNameMatching].
+                                          matchings['tel']);
+      var isMailMatching = Array.isArray(phoneMailMatches[aNameMatching].
+                                          matchings['email']);
 
       // Three cases under which a matching is considered
       if (isPhoneMatching && isMailMatching) {

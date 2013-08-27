@@ -229,6 +229,11 @@ li a[role="button"].activity {
   padding: 0 1rem 0 0;
 }
 
+li button.activity.no-icon,
+li a[role="button"].activity.no-icon {
+  padding-left: 1.5rem;
+}
+
 li button.activity:active,
 li a[role="button"].activity:active {
   background-color: #008AAA;
@@ -296,7 +301,7 @@ li a[role="button"].activity > b{
 }
 
 .view-select-tag .selection-list li button.icon-selected:before {
-  background: transparent url(gphx/bitmap/default/lists/tick.png) no-repeat center center;
+  background: transparent url(gphx/bitmap/default/lists/tick.png) no-repeat center center / 2rem;
 }
 
 /* Input areas customization*/
@@ -485,7 +490,7 @@ li button.icon-fb-profile:before {
 
 li button.icon-add:before {
   background-image: url(/contacts/style/gphx/bitmap/default/buttons/plus_sign.png);
-  background-size: 2.8rem;
+  background-size: auto;
 }
 
 
@@ -655,4 +660,38 @@ nav[data-type="scrollbar"] p img {
   top: 25%;
   left: 25%;
   width: 4.8rem;
+}
+
+#groups-list.selecting label.pack-checkbox {
+  display: block !important;
+}
+
+#groups-container.selecting {
+  height: -moz-calc(100% - 7rem);
+}
+
+#groups-list label.pack-checkbox {
+  display: none !important;
+}
+
+.selecting li label {
+  left: -1rem !important;
+}
+
+.selecting li p {
+  padding-left: 2rem !important;
+}
+
+form[role="dialog"].no-overlay {
+  background: none;
+  pointer-events: none;
+  position: fixed;
+}
+
+form[role="dialog"].no-overlay button {
+  pointer-events: auto;
+}
+
+#selectable-form {
+  background: none;
 }

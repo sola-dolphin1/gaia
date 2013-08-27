@@ -2,35 +2,31 @@
 
 requireApp('system/test/unit/mock_settings_listener.js');
 requireApp('system/test/unit/mock_l10n.js');
-requireApp('system/test/unit/mock_navigator_moz_mobile_connection.js');
+requireApp('system/shared/test/unit/mocks/mock_navigator_moz_mobile_connection.js');
 requireApp('system/test/unit/mock_navigator_moz_telephony.js');
-requireApp('system/test/unit/mock_icc_helper.js');
+requireApp('system/shared/test/unit/mocks/mock_icc_helper.js');
 requireApp('system/test/unit/mock_mobile_operator.js');
-requireApp('system/test/unit/mocks_helper.js');
+requireApp('system/test/unit/mock_lock_screen.js');
 
 requireApp('system/js/statusbar.js');
 requireApp('system/js/lockscreen.js');
 
-var mocksForStatusBar = ['SettingsListener', 'MobileOperator', 'IccHelper'];
-
-mocksForStatusBar.forEach(function(mockName) {
-  if (!window[mockName]) {
-    window[mockName] = null;
-  }
-});
-
+var mocksForStatusBar = new MocksHelper([
+  'SettingsListener',
+  'MobileOperator',
+  'IccHelper',
+  'LockScreen'
+]).init();
 
 suite('system/Statusbar', function() {
   var fakeStatusBarNode;
-  var mocksHelper;
 
   var realSettingsListener, realMozL10n, realMozMobileConnection,
       realMozTelephony, realMobileOperator,
       fakeIcons = [];
 
+  mocksForStatusBar.attachTestHelpers();
   suiteSetup(function() {
-    mocksHelper = new MocksHelper(mocksForStatusBar);
-    mocksHelper.suiteSetup();
     realMozL10n = navigator.mozL10n;
     navigator.mozL10n = MockL10n;
     realMozMobileConnection = navigator.mozMobileConnection;
@@ -40,14 +36,12 @@ suite('system/Statusbar', function() {
   });
 
   suiteTeardown(function() {
-    mocksHelper.suiteTeardown();
     navigator.mozL10n = realMozL10n;
     navigator.mozMobileConnection = realMozMobileConnection;
     navigator.mozTelephony = realMozTelephony;
   });
 
   setup(function() {
-    mocksHelper.setup();
     fakeStatusBarNode = document.createElement('div');
     fakeStatusBarNode.id = 'statusbar';
     document.body.appendChild(fakeStatusBarNode);
@@ -70,7 +64,6 @@ suite('system/Statusbar', function() {
     StatusBar.init();
   });
   teardown(function() {
-    mocksHelper.teardown();
     fakeStatusBarNode.parentNode.removeChild(fakeStatusBarNode);
     MockNavigatorMozTelephony.mTeardown();
     MockNavigatorMozMobileConnection.mTeardown();
@@ -115,6 +108,95 @@ suite('system/Statusbar', function() {
       StatusBar.decSystemDownloads();
       StatusBar.incSystemDownloads();
       assert.isFalse(fakeIcons['system-downloads'].hidden);
+    });
+  });
+
+  suite('time bar', function() {
+    setup(function() {
+      StatusBar.clock.stop();
+      StatusBar.screen = document.createElement('div');
+    });
+    teardown(function() {
+      StatusBar.screen = null;
+    });
+    test('first launch', function() {
+      MockLockScreen.locked = true;
+      StatusBar.init();
+      assert.equal(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, true);
+    });
+    test('lock', function() {
+      var evt = new CustomEvent('lock');
+      StatusBar.handleEvent(evt);
+      assert.equal(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, true);
+    });
+    test('unlock', function() {
+      var evt = new CustomEvent('unlock');
+      StatusBar.handleEvent(evt);
+      assert.notEqual(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, false);
+    });
+    test('attentionscreen show', function() {
+      var evt = new CustomEvent('attentionscreenshow');
+      StatusBar.handleEvent(evt);
+      assert.notEqual(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, false);
+    });
+    test('attentionsceen hide', function() {
+      var evt = new CustomEvent('attentionscreenhide');
+      StatusBar.handleEvent(evt);
+      assert.equal(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, true);
+    });
+    test('emergency call when locked', function() {
+      var evt = new CustomEvent('lockpanelchange', {
+        detail: {
+          panel: 'emergency-call'
+        }
+      });
+      StatusBar.screen.classList.add('locked');
+      StatusBar.handleEvent(evt);
+      assert.notEqual(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, false);
+    });
+    test('moztime change', function() {
+      var evt = new CustomEvent('moztimechange');
+      StatusBar.handleEvent(evt);
+      assert.notEqual(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, false);
+    });
+    test('screen enable but screen is unlocked', function() {
+      var evt = new CustomEvent('screenchange', {
+        detail: {
+          screenEnabled: true
+        }
+      });
+      MockLockScreen.locked = false;
+      StatusBar.handleEvent(evt);
+      assert.notEqual(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, false);
+    });
+    test('screen enable and screen is locked', function() {
+      var evt = new CustomEvent('screenchange', {
+        detail: {
+          screenEnabled: true
+        }
+      });
+      MockLockScreen.locked = true;
+      StatusBar.handleEvent(evt);
+      assert.equal(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, true);
+    });
+    test('screen disable', function() {
+      var evt = new CustomEvent('screenchange', {
+        detail: {
+          screenEnabled: false
+        }
+      });
+      StatusBar.handleEvent(evt);
+      assert.equal(StatusBar.clock.timeoutID, null);
+      assert.equal(StatusBar.icons.time.hidden, true);
     });
   });
 

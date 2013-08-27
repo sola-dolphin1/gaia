@@ -15,10 +15,44 @@ var MockFindMatcher = {
         this.result = [this.data];
       }
     }
+    else if (options.filterBy.indexOf('familyName') !== -1) {
+      var value = options.filterValue;
+      if (this.data.familyName && this.data.familyName[0] === value) {
+        this.result = [this.data];
+      }
+    }
+    else if (options.filterBy.indexOf('name') !== -1) {
+      var value = options.filterValue;
+      if (this.data.name && this.data.name[0] === value) {
+        this.result = [this.data];
+      }
+    }
     return {
       result: this.result,
       set onsuccess(cb) {
         cb();
+      }
+    };
+  },
+
+  save: function() {
+    return {
+      set onsuccess(cb) {
+        cb();
+      },
+      set onerror(cb) {
+
+      }
+    };
+  },
+
+  remove: function() {
+    return {
+      set onsuccess(cb) {
+        cb();
+      },
+      set onerror(cb) {
+
       }
     };
   },
