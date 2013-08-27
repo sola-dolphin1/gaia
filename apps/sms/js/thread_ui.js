@@ -41,7 +41,7 @@ function thui_generateSmilSlides(slides, content) {
 
 var ThreadUI = global.ThreadUI = {
   // Time buffer for the 'last-messages' set. In this case 10 min
-  LAST_MESSSAGES_BUFFERING_TIME: 10 * 60 * 1000,
+  LAST_MESSAGES_BUFFERING_TIME: 10 * 60 * 1000,
   CHUNK_SIZE: 10,
   // duration of the notification that message type was converted
   CONVERTED_MESSAGE_DURATION: 3000,
@@ -53,7 +53,13 @@ var ThreadUI = global.ThreadUI = {
   init: function thui_init() {
     var _ = navigator.mozL10n.get;
     var templateIds = [
-      'contact', 'number', 'highlight', 'message', 'not-downloaded', 'recipient'
+      'contact',
+      'contact-photo',
+      'highlight',
+      'message',
+      'not-downloaded',
+      'number',
+      'recipient'
     ];
 
     Compose.init('messages-compose-form');
@@ -329,7 +335,10 @@ var ThreadUI = global.ThreadUI = {
   // Method for setting the body of a SMS/MMS from activity
   setMessageBody: function thui_setMessageBody(value) {
     Compose.clear();
-    Compose.append(value);
+    if (value) {
+      Compose.append(value);
+    }
+    Compose.focus();
   },
 
   messageComposerInputHandler: function thui_messageInputHandler(event) {
@@ -363,8 +372,13 @@ var ThreadUI = global.ThreadUI = {
   },
 
   assimilateRecipients: function thui_assimilateRecipients() {
+    var isNew = window.location.hash === '#new';
     var node = this.recipientsList.lastChild;
     var typed;
+
+    if (!isNew || node === null) {
+      return;
+    }
 
     // Restore the recipients list input area to
     // single line view.
@@ -496,20 +510,34 @@ var ThreadUI = global.ThreadUI = {
     this.enableSend();
   },
 
+  // scroll position is considered as "manual" if the view is not completely
+  // scrolled to the bottom
+  isScrolledManually: false,
+
   // We define an edge for showing the following chunk of elements
   manageScroll: function thui_manageScroll(oEvent) {
+    var scrollTop = this.container.scrollTop;
+    var scrollHeight = this.container.scrollHeight;
+    var clientHeight = this.container.clientHeight;
+
+    this.isScrolledManually = ((scrollTop + clientHeight) < scrollHeight);
+
     // kEdge will be the limit (in pixels) for showing the next chunk
     var kEdge = 30;
-    var currentScroll = this.container.scrollTop;
-    if (currentScroll < kEdge) {
-      var previous = this.container.scrollHeight;
+    if (scrollTop < kEdge) {
       this.showChunkOfMessages(this.CHUNK_SIZE);
       // We update the scroll to the previous position
       // taking into account the previous offset to top
       // and the current height due to we have added a new
       // chunk of visible messages
       this.container.scrollTop =
-        (this.container.scrollHeight - previous) + currentScroll;
+        (this.container.scrollHeight - scrollHeight) + scrollTop;
+    }
+  },
+
+  scrollViewToBottom: function thui_scrollViewToBottom() {
+    if (!this.isScrolledManually) {
+      this.container.scrollTop = this.container.scrollHeight;
     }
   },
 
@@ -599,10 +627,6 @@ var ThreadUI = global.ThreadUI = {
       (window.location.hash == '#new' && !hasRecipients);
 
     this.sendButton.disabled = disableSendMessage;
-  },
-
-  scrollViewToBottom: function thui_scrollViewToBottom() {
-    this.container.scrollTop = this.container.scrollHeight;
   },
 
   // updates the counter for sms segments when in text only mode
@@ -720,82 +744,133 @@ var ThreadUI = global.ThreadUI = {
     this.scrollViewToBottom();
   },
 
+  findNextContainer: function thui_findNextContainer(container) {
+    if (!container) {
+      return null;
+    }
+
+    var nextContainer = container;
+    do {
+      nextContainer = nextContainer.nextElementSibling;
+    } while (nextContainer && nextContainer.tagName !== 'UL');
+
+    return nextContainer;
+  },
+
+  findFirstContainer: function thui_findFirstLastContainer() {
+    var container = this.container.firstElementChild;
+    if (container && container.tagName !== 'UL') {
+      container = this.findNextContainer(container);
+    }
+    return container;
+  },
+
   // Adds a new grouping header if necessary (today, tomorrow, ...)
   getMessageContainer:
     function thui_getMessageContainer(messageTimestamp, hidden) {
-    var normalizedTimestamp = Utils.getDayDate(messageTimestamp);
-    var referenceTime = Date.now();
-    var messageContainer;
-    // If timestamp belongs to [referenceTime, referenceTime - TimeBuffer]
+    var startOfDayTimestamp = Utils.getDayDate(messageTimestamp);
+    var now = Date.now();
+    var messageContainer, header;
+    // If timestamp belongs to [now, now - TimeBuffer]
+    var lastMessageDelay = this.LAST_MESSAGES_BUFFERING_TIME;
     var isLastMessagesBlock =
-    (messageTimestamp >= (referenceTime - this.LAST_MESSSAGES_BUFFERING_TIME));
+      (messageTimestamp >= (now - lastMessageDelay));
+
     // Is there any container with our requirements?
     if (isLastMessagesBlock) {
       messageContainer = document.getElementById('last-messages');
+      if (messageContainer) {
+        var oldTimestamp = messageContainer.dataset.timestamp;
+        var oldDayTimestamp = Utils.getDayDate(oldTimestamp);
+        var shouldCreateNewBlock =
+          (oldDayTimestamp !== startOfDayTimestamp) || // new day
+          (oldTimestamp < messageTimestamp - lastMessageDelay); // too old
+
+        if (shouldCreateNewBlock) {
+          messageContainer.id = 'mc_' + Utils.getDayDate(oldTimestamp);
+          messageContainer.dataset.timestamp = oldDayTimestamp;
+          messageContainer = null;
+        }
+      }
     } else {
-      messageContainer = document.getElementById('mc_' + normalizedTimestamp);
+      messageContainer = document.getElementById('mc_' + startOfDayTimestamp);
     }
 
     if (messageContainer) {
+      header = messageContainer.previousElementSibling;
+      if (messageTimestamp < header.dataset.time) {
+        header.dataset.time = messageTimestamp;
+      }
       return messageContainer;
     }
+
     // If there is no messageContainer we have to create it
-    // Create DOM Element for header
-    var header = document.createElement('header');
+    // Create DOM Elements
+    header = document.createElement('header');
+    messageContainer = document.createElement('ul');
+
     // Append 'time-update' state
     header.dataset.timeUpdate = true;
     header.dataset.time = messageTimestamp;
+
+    // Add text
+    var content, timeOnly = false;
+    if (isLastMessagesBlock) {
+      var lastContainer = this.container.lastElementChild;
+      if (lastContainer) {
+        var lastDay = Utils.getDayDate(lastContainer.dataset.timestamp);
+        if (lastDay === startOfDayTimestamp) {
+          // same day -> show only the time
+          header.dataset.timeOnly = 'true';
+        }
+      }
+
+      messageContainer.id = 'last-messages';
+      messageContainer.dataset.timestamp = messageTimestamp;
+    } else {
+      messageContainer.id = 'mc_' + startOfDayTimestamp;
+      messageContainer.dataset.timestamp = startOfDayTimestamp;
+    }
+
     if (hidden) {
       header.classList.add('hidden');
-    }
-    // Add text
-    var content;
-    if (!isLastMessagesBlock) {
-      content = Utils.getHeaderDate(messageTimestamp) + ' ' +
-                Utils.getFormattedHour(messageTimestamp);
     } else {
-      content = Utils.getFormattedHour(messageTimestamp);
-      header.dataset.hourOnly = 'true';
+      Utils.updateTimeHeader(header);
     }
-    header.innerHTML = content;
-    // Create list element for ul
-    messageContainer = document.createElement('ul');
-    if (!isLastMessagesBlock) {
-      messageContainer.id = 'mc_' + normalizedTimestamp;
-    } else {
-      messageContainer.id = 'last-messages';
-    }
-    messageContainer.dataset.timestamp = normalizedTimestamp;
+
     // Where do I have to append the Container?
-    // If is the first block or is the 'last-messages' one should be the
-    // most recent one.
-    if (isLastMessagesBlock || !ThreadUI.container.firstElementChild) {
-      ThreadUI.container.appendChild(header);
-      ThreadUI.container.appendChild(messageContainer);
+    // If is the 'last-messages' one should be the most recent one.
+    if (isLastMessagesBlock) {
+      this.container.appendChild(header);
+      this.container.appendChild(messageContainer);
       return messageContainer;
     }
+
     // In other case we have to look for the right place for appending
     // the message
-    var messageContainers = ThreadUI.container.getElementsByTagName('ul');
     var insertBeforeContainer;
-    for (var i = 0, l = messageContainers.length; i < l; i++) {
-      if (normalizedTimestamp < messageContainers[i].dataset.timestamp) {
-        insertBeforeContainer = messageContainers[i];
-        break;
-      }
+    var curContainer = this.findFirstContainer();
+
+    while (curContainer &&
+           +curContainer.dataset.timestamp < startOfDayTimestamp) {
+      curContainer = this.findNextContainer(curContainer);
     }
-    // If is undefined we try witn the 'last-messages' block
-    if (!insertBeforeContainer) {
-      insertBeforeContainer = document.getElementById('last-messages');
-    }
+
+    insertBeforeContainer = curContainer;
+
     // Finally we append the container & header in the right position
+    // With this function, "inserting before 'null'" means "appending"
+    this.container.insertBefore(messageContainer,
+      insertBeforeContainer ? insertBeforeContainer.previousSibling : null);
+    this.container.insertBefore(header, messageContainer);
+
+    // if the next container is the same date => we must update his header
     if (insertBeforeContainer) {
-      ThreadUI.container.insertBefore(messageContainer,
-        insertBeforeContainer.previousSibling);
-      ThreadUI.container.insertBefore(header, messageContainer);
-    } else {
-      ThreadUI.container.appendChild(header);
-      ThreadUI.container.appendChild(messageContainer);
+      var nextContainerTimestamp = insertBeforeContainer.dataset.timestamp;
+      if (startOfDayTimestamp === Utils.getDayDate(nextContainerTimestamp)) {
+        header = insertBeforeContainer.previousElementSibling;
+        header.dataset.timeOnly = 'true';
+      }
     }
     return messageContainer;
   },
@@ -925,6 +1000,8 @@ var ThreadUI = global.ThreadUI = {
 
   createMmsContent: function thui_createMmsContent(dataArray) {
     var container = document.createDocumentFragment();
+    var scrollViewToBottom = ThreadUI.scrollViewToBottom.bind(ThreadUI);
+
     dataArray.forEach(function(messageData) {
       var mediaElement, textElement;
 
@@ -932,7 +1009,7 @@ var ThreadUI = global.ThreadUI = {
         var attachment = new Attachment(messageData.blob, {
           name: messageData.name
         });
-        var mediaElement = attachment.render();
+        var mediaElement = attachment.render(scrollViewToBottom);
         container.appendChild(mediaElement);
         attachmentMap.set(mediaElement, attachment);
       }
@@ -1000,13 +1077,14 @@ var ThreadUI = global.ThreadUI = {
       end: onMessagesRendered
     };
     MessageManager.getMessages(renderingOptions);
+    // force the next scroll to bottom
+    this.isScrolledManually = false;
   },
 
   // generates the html for not-downloaded messages - pushes class names into
   // the classNames array also passed in, returns an HTML string
   _createNotDownloadedHTML:
   function thui_createNotDownloadedHTML(message, classNames) {
-
     var _ = navigator.mozL10n.get;
 
     // default strings:
@@ -1052,6 +1130,12 @@ var ThreadUI = global.ThreadUI = {
     var classNames = ['message', message.type, delivery];
 
     var notDownloaded = delivery === 'not-downloaded';
+    var attachments = message.attachments;
+    // Returning attachments would be different based on gecko version:
+    // null in b2g18 / empty array in master.
+    var noAttachment = (message.type === 'mms' && !notDownloaded &&
+      (attachments === null || attachments.length === 0));
+    var _ = navigator.mozL10n.get;
 
     if (delivery === 'received' || notDownloaded) {
       classNames.push('incoming');
@@ -1076,6 +1160,11 @@ var ThreadUI = global.ThreadUI = {
       bodyHTML = this._createNotDownloadedHTML(message, classNames);
     }
 
+    if (noAttachment) {
+      classNames = classNames.concat(['error', 'no-attachment']);
+      bodyHTML = Utils.escapeHTML(_('no-attachment-text'));
+    }
+
     messageDOM.className = classNames.join(' ');
     messageDOM.id = 'message-' + message.id;
     messageDOM.dataset.messageId = message.id;
@@ -1087,7 +1176,7 @@ var ThreadUI = global.ThreadUI = {
       safe: ['bodyHTML']
     });
 
-    if (message.type === 'mms' && !notDownloaded) { // MMS
+    if (message.type === 'mms' && !notDownloaded && !noAttachment) { // MMS
       var pElement = messageDOM.querySelector('p');
       SMIL.parse(message, function(slideArray) {
         pElement.appendChild(ThreadUI.createMmsContent(slideArray));
@@ -1113,7 +1202,7 @@ var ThreadUI = global.ThreadUI = {
 
     messageDOM.dataset.timestamp = timestamp;
     // Add to the right position
-    var messageContainer = ThreadUI.getMessageContainer(timestamp, hidden);
+    var messageContainer = this.getMessageContainer(timestamp, hidden);
     if (!messageContainer.firstElementChild) {
       messageContainer.appendChild(messageDOM);
     } else {
@@ -1139,7 +1228,11 @@ var ThreadUI = global.ThreadUI = {
   showChunkOfMessages: function thui_showChunkOfMessages(number) {
     var elements = ThreadUI.container.getElementsByClassName('hidden');
     for (var i = elements.length - 1; i >= 0; i--) {
-      elements[i].classList.remove('hidden');
+      var element = elements[i];
+      element.classList.remove('hidden');
+      if (element.tagName === 'HEADER') {
+        Utils.updateTimeHeader(element);
+      }
     }
   },
 
@@ -1293,6 +1386,12 @@ var ThreadUI = global.ThreadUI = {
       return;
     }
 
+    // Do nothing for no attachment error because it's not possible to
+    // retrieve message again in this edge case.
+    if (elems.message.classList.contains('no-attachment')) {
+      return;
+    }
+
     // Click events originating from a "pack-end" aside of an error message
     // should trigger a prompt for retransmission.
     if (elems.message.classList.contains('error') && elems.packEnd) {
@@ -1301,7 +1400,6 @@ var ThreadUI = global.ThreadUI = {
       }
       return;
     }
-
   },
 
   handleEvent: function thui_handleEvent(evt) {
@@ -1311,7 +1409,7 @@ var ThreadUI = global.ThreadUI = {
           // if the click wasn't on an attachment check for other clicks
           if (!thui_mmsAttachmentClick(evt.target)) {
             this.handleMessageClick(evt);
-            LinkActionHandler.handleTapEvent(evt);
+            LinkActionHandler.onClick(evt);
           }
           return;
         }
@@ -1323,9 +1421,7 @@ var ThreadUI = global.ThreadUI = {
         }
         break;
       case 'contextmenu':
-        evt.preventDefault();
-        evt.stopPropagation();
-        LinkActionHandler.handleLongPressEvent(evt);
+        LinkActionHandler.onContextMenu(evt);
         break;
       case 'submit':
         evt.preventDefault();
@@ -1473,14 +1569,7 @@ var ThreadUI = global.ThreadUI = {
     var buttonLabel = '';
 
     switch (errorName) {
-      case 'NoSignalError':
-      case 'NotFoundError':
-      case 'UnknownError':
-      case 'InternalError':
-        messageTitle = 'sendGeneralErrorTitle';
-        messageBody = 'sendGeneralErrorBody';
-        buttonLabel = 'sendGeneralErrorBtnOk';
-        break;
+
       case 'NoSimCardError':
         messageTitle = 'sendNoSimCardTitle';
         messageBody = 'sendNoSimCardBody';
@@ -1491,6 +1580,15 @@ var ThreadUI = global.ThreadUI = {
         messageBody = 'sendAirplaneModeBody';
         buttonLabel = 'sendAirplaneModeBtnOk';
         break;
+      case 'NoSignalError':
+      case 'NotFoundError':
+      case 'UnknownError':
+      case 'InternalError':
+      case 'InvalidAddressError':
+      default:
+        messageTitle = 'sendGeneralErrorTitle';
+        messageBody = 'sendGeneralErrorBody';
+        buttonLabel = 'sendGeneralErrorBtnOk';
     }
 
     var dialog = new Dialog({
@@ -1595,8 +1693,11 @@ var ThreadUI = global.ThreadUI = {
      *     |true| if the value params.input should be
      *     highlighted in the rendered HTML & all tel
      *     entries should be rendered.
-     *     *
+     *
+     *   renderPhoto:
+     *     |true| if we want to retrieve the contact photo
      * }
+     *
      */
 
     // Contact records that don't have phone numbers
@@ -1613,6 +1714,7 @@ var ThreadUI = global.ThreadUI = {
     var isSuggestion = params.isSuggestion;
     var tels = contact.tel;
     var telsLength = tels.length;
+    var renderPhoto = params.renderPhoto;
 
     // We search on the escaped HTML via a regular expression
     var escaped = Utils.escapeRegex(Utils.escapeHTML(input));
@@ -1632,8 +1734,9 @@ var ThreadUI = global.ThreadUI = {
       return false;
     }
 
+    var include = renderPhoto ? { photoURL: true } : null;
     var details = isContact ?
-      Utils.getContactDetails(tels[0].value, contact) : {
+      Utils.getContactDetails(tels[0].value, contact, include) : {
         name: '',
         photoURL: ''
       };
@@ -1695,11 +1798,17 @@ var ThreadUI = global.ThreadUI = {
         }
       }, this);
 
+      // Render contact photo only if specifically stated on the call
+      data.photoHTML = renderPhoto ?
+        this.tmpl.contactPhoto.interpolate({
+          photoURL: details.photoURL || ''
+        }) : '';
+
       // Interpolate HTML template with data and inject.
       // Known "safe" HTML values will not be re-sanitized.
       if (isContact) {
         li.innerHTML = this.tmpl.contact.interpolate(data, {
-          safe: ['nameHTML', 'numberHTML', 'srcAttr']
+          safe: ['nameHTML', 'numberHTML', 'srcAttr', 'photoHTML']
         });
       } else {
         li.innerHTML = this.tmpl.number.interpolate(data);
@@ -1871,7 +1980,8 @@ var ThreadUI = global.ThreadUI = {
           input: participant,
           target: ul,
           isContact: isContact,
-          isSuggestion: false
+          isSuggestion: false,
+          renderPhoto: true
         });
       }.bind(this));
     }.bind(this));
@@ -1899,38 +2009,55 @@ var ThreadUI = global.ThreadUI = {
     var _ = navigator.mozL10n.get;
     var thread = Threads.get(Threads.lastId || Threads.currentId);
     var number = opt.number;
-    var name = opt.name || number;
+    var email = opt.email;
+    var name = opt.name || number || email;
     var isContact = opt.isContact || false;
+    var inMessage = opt.inMessage || false;
     var items = [];
-    var params;
+    var params, props;
 
-    // An activation for a single, known recipient contact
+    // Multi-participant activation for for a single, known
+    // recipient contact, that is not triggered from a message,
     // will initiate a call to that recipient contact.
-    if (isContact && thread.participants.length === 1) {
-      ActivityPicker.call(number);
+    if ((thread && thread.participants.length === 1) &&
+        isContact && !inMessage) {
+
+      ActivityPicker.dial(number);
       return;
     }
 
-    // All activations will see a "Call" option
-    items.push({
-      name: _('call'),
-      method: function oCall(param) {
-        ActivityPicker.call(param);
-      },
-      params: [number]
-    });
-
-    // Multi-participant activations will also see
-    // a "Send Message" option
-    if (thread.participants.length > 1) {
+    // All non-email activations will see a "Call" option
+    if (email) {
       items.push({
-        name: _('sendMessage'),
+        name: _('sendEmail'),
         method: function oCall(param) {
-          ActivityPicker.sendMessage(param);
+          ActivityPicker.dial(param);
+        },
+        params: [email]
+      });
+    } else {
+      items.push({
+        name: _('call'),
+        method: function oCall(param) {
+          ActivityPicker.dial(param);
         },
         params: [number]
       });
+
+
+      // Multi-participant activations or in-message numbers
+      // will include a "Send Message" option in the menu
+      if ((thread && thread.participants.length > 1) || inMessage) {
+        items.push({
+          name: _('sendMessage'),
+          method: function oCall(param) {
+            ActivityPicker.sendMessage(param);
+          },
+          params: [number]
+        });
+      }
     }
+
 
     // Combine the items and complete callback into
     // a single params object.
@@ -1947,6 +2074,10 @@ var ThreadUI = global.ThreadUI = {
 
     } else {
 
+      props = [
+        number ? {tel: number} : {email: email}
+      ];
+
       params.header = number;
       params.items.push({
           name: _('createNewContact'),
@@ -1955,7 +2086,7 @@ var ThreadUI = global.ThreadUI = {
               param, ThreadUI.onCreateContact
             );
           },
-          params: [{'tel': number}]
+          params: props
         },
         {
           name: _('addToExistingContact'),
@@ -1964,7 +2095,7 @@ var ThreadUI = global.ThreadUI = {
               param, ThreadUI.onCreateContact
             );
           },
-          params: [{'tel': number}]
+          params: props
         }
       );
     }
@@ -1978,7 +2109,6 @@ var ThreadUI = global.ThreadUI = {
     var options = new OptionMenu(params);
     options.show();
   },
-
 
   onCreateContact: function thui_onCreateContact() {
     ThreadListUI.updateContactsInfo();

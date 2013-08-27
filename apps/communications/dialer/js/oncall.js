@@ -33,20 +33,20 @@ var CallScreen = {
   lockedContactPhoto: document.getElementById('locked-contact-photo'),
 
   init: function cs_init() {
-    this.muteButton.addEventListener('mouseup', this.toggleMute.bind(this));
-    this.keypadButton.addEventListener('mouseup', this.showKeypad.bind(this));
-    this.speakerButton.addEventListener('mouseup',
+    this.muteButton.addEventListener('click', this.toggleMute.bind(this));
+    this.keypadButton.addEventListener('click', this.showKeypad.bind(this));
+    this.speakerButton.addEventListener('click',
                                     this.toggleSpeaker.bind(this));
-    this.answerButton.addEventListener('mouseup',
+    this.answerButton.addEventListener('click',
                                     OnCallHandler.answer.bind(OnCallHandler));
-    this.rejectButton.addEventListener('mouseup',
+    this.rejectButton.addEventListener('click',
                                     OnCallHandler.end);
 
-    this.incomingAnswer.addEventListener('mouseup',
+    this.incomingAnswer.addEventListener('click',
                               OnCallHandler.holdAndAnswer);
-    this.incomingEnd.addEventListener('mouseup',
+    this.incomingEnd.addEventListener('click',
                               OnCallHandler.endAndAnswer);
-    this.incomingIgnore.addEventListener('mouseup',
+    this.incomingIgnore.addEventListener('click',
                                     OnCallHandler.ignore);
 
     this.calls.addEventListener('click',
@@ -549,10 +549,16 @@ var OnCallHandler = (function onCallHandler() {
         answer();
         break;
       case 'CHUP+ATA':
-        endAndAnswer();
+        // End the active call and answer the other one
+        if (handledCalls.length === 1) {
+          end();
+        } else {
+          endAndAnswer();
+        }
         break;
       case 'CHLD+ATA':
-        if (telephony.calls.length === 1) {
+        // Hold the active call and answer the other one
+        if (handledCalls.length === 1) {
           holdOrResumeSingleCall();
         } else {
           holdAndAnswer();
@@ -631,23 +637,33 @@ var OnCallHandler = (function onCallHandler() {
   }
 
   function holdAndAnswer() {
-    var lastCallIndex = handledCalls.length - 1;
+    if (handledCalls.length < 2) {
+      return;
+    }
 
-    telephony.active.hold();
-    handledCalls[lastCallIndex].call.answer();
+    if (telephony.active) {
+      // connected, incoming
+      telephony.active.hold(); // the incoming call is answered by gecko
+    } else {
+      // held, incoming
+      var lastCall = handledCalls[handledCalls.length - 1].call;
+      lastCall.answer(); // the previous call is held by gecko
+    }
 
     CallScreen.hideIncoming();
   }
 
   function endAndAnswer() {
-    var callToEnd = telephony.active;
-    var callToAnswer = handledCalls[handledCalls.length - 1].call;
+    if (handledCalls.length < 2) {
+      return;
+    }
 
-    callToEnd.addEventListener('disconnected', function disconnected() {
-      callToEnd.removeEventListener('disconnected', disconnected);
-      callToAnswer.answer();
-    });
-    callToEnd.hangUp();
+    var callToEnd = telephony.active ||           // connected, incoming
+      handledCalls[handledCalls.length - 2].call; // held, incoming
+
+    if (callToEnd) {
+      callToEnd.hangUp(); // the incoming call is answered automatically
+    }
 
     CallScreen.hideIncoming();
   }
@@ -658,7 +674,10 @@ var OnCallHandler = (function onCallHandler() {
     }
 
     if (handledCalls.length < 2) {
-      holdOrResumeSingleCall();
+      // Putting a call on Hold when there are no other
+      // calls in progress has been disabled until a less
+      // accidental user-interface is implemented.
+      // See bug 894232 and bug 882056 for more background.
       return;
     }
 

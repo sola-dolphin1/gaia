@@ -718,10 +718,14 @@
         <div id="permission-dialog" role="dialog">
           <div class="inner">
             <h2 id="permission-message"></h2>
+            <div id="permission-more-info" class="hidden">
+              <a id="permission-more-info-link" data-l10n-id="more-info" href="#">More Info…</a>
+              <div id="permission-more-info-box" class="hidden"> </div>
+            </div>
             <div id="permission-remember-section">
               <a data-l10n-id="remember-my-choice" id="permission-remember-label">Remember my choice</a>
-              <label>
-                <input data-type="switch" type="checkbox" id="permission-remember-checkbox" />
+              <label class="pack-switch">
+                <input type="checkbox" id="permission-remember-checkbox" />
                 <span></span>
               </label>
             </div>
@@ -838,6 +842,9 @@
             <div id="lockscreen-header">
               <div id="lockscreen-connstate" hidden><span></span><span></span></div>
               <div id="lockscreen-mute" hidden></div>
+              <div id="lockscreen-alt-camera" class="lockscreen-icon">
+                <div role="button" data-l10n-id="camera-a11y-button" aria-label="Camera"></div>
+              </div>
               <div class="lockscreen-clock">
                 <span id="lockscreen-clock-numbers"></span>
                 <span id="lockscreen-clock-meridiem"></span>

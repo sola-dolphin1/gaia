@@ -14,6 +14,7 @@ requireApp('sms/test/unit/mock_compose.js');
 requireApp('sms/test/unit/mock_contact.js');
 requireApp('sms/test/unit/mock_contacts.js');
 requireApp('sms/test/unit/mock_utils.js');
+requireApp('sms/test/unit/mock_l10n.js');
 
 requireApp('sms/js/message_manager.js');
 
@@ -200,7 +201,9 @@ suite('message_manager.js >', function() {
   });
 
   suite('launchComposer() >', function() {
+    var nativeMozL10n = navigator.mozL10n;
     suiteSetup(function() {
+      navigator.mozL10n = MockL10n;
       loadBodyHTML('/index.html');
       ThreadUI.initRecipients();
     });
@@ -221,10 +224,13 @@ suite('message_manager.js >', function() {
         }
       );
 
+      this.sinon.stub(ThreadUI, 'setMessageBody');
+
       MessageManager.threadMessages = document.createElement('div');
     });
 
     suiteTeardown(function() {
+      navigator.mozL10n = nativeMozL10n;
       ThreadUI.recipients = null;
     });
 
@@ -236,6 +242,7 @@ suite('message_manager.js >', function() {
 
       assert.equal(ThreadUI.recipients.numbers.length, 1);
       assert.equal(ThreadUI.recipients.numbers[0], '998');
+      assert.ok(ThreadUI.setMessageBody.calledWith());
     });
 
     test('from activity with known contact', function() {
@@ -245,6 +252,50 @@ suite('message_manager.js >', function() {
 
       assert.equal(ThreadUI.recipients.numbers.length, 1);
       assert.equal(ThreadUI.recipients.numbers[0], '+346578888888');
+      assert.ok(ThreadUI.setMessageBody.calledWith());
+    });
+
+    test('with message body', function() {
+      MessageManager.launchComposer({
+        number: '998',
+        contact: null,
+        body: 'test'
+      });
+      assert.ok(ThreadUI.setMessageBody.calledWith('test'));
+    });
+
+    test('No contact and no number', function() {
+      MessageManager.launchComposer({
+        number: null,
+        contact: null,
+        body: 'Youtube url'
+      });
+      assert.equal(ThreadUI.recipients.numbers.length, 0);
+      assert.ok(ThreadUI.setMessageBody.calledWith('Youtube url'));
+    });
+  });
+
+  suite('onHashChange', function() {
+    setup(function() {
+      this.sinon.spy(document.activeElement, 'blur');
+      this.sinon.spy(ThreadUI, 'cancelEdit');
+      this.sinon.spy(ThreadListUI, 'cancelEdit');
+      this.sinon.spy(ThreadUI.groupView, 'reset');
+
+      MessageManager.onHashChange();
+    });
+
+    test('Remove any focus left on specific elements ', function() {
+      assert.ok(document.activeElement.blur.called);
+    });
+
+    test('Exit edit mode (Thread or Message) ', function() {
+      assert.ok(ThreadUI.cancelEdit.called);
+      assert.ok(ThreadListUI.cancelEdit.called);
+    });
+
+    test('Reset Group Participants View ', function() {
+      assert.ok(ThreadUI.groupView.reset.called);
     });
   });
 });

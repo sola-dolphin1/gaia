@@ -33,18 +33,17 @@
   window.AppError = function AppError(app) {
     var self = this;
     this.app = app;
-    this.app.frame.addEventListener('mozbrowsererror', function(evt) {
+    this.app.iframe.addEventListener('mozbrowsererror', function(evt) {
       if (evt.detail.type != 'other')
         return;
 
       console.warn(
         'app of [' + self.app.origin + '] got a mozbrowsererror event.');
 
-      if (self.injected) {
-        self.update();
-      } else {
+      if (!self.injected) {
         self.render();
       }
+      self.update();
       self.show();
       self.injected = true;
     });
@@ -116,11 +115,9 @@
     return '<div id="' + this.id() + '" class="' +
         AppError.className + ' visible" role="dialog">' +
       '<div class="modal-dialog-message-container inner">' +
-        '<h3 data-l10n-id="error-title" class="title">' +
-          this.getTitle() + '</h3>' +
+        '<h3 data-l10n-id="error-title" class="title"></h3>' +
         '<p>' +
-         '<span data-l10n-id="error-message" class="message">' +
-            this.getMessage() + '</span>' +
+         '<span data-l10n-id="error-message" class="message"></span>' +
         '</p>' +
       '</div>' +
       '<menu data-items="2">' +
@@ -460,7 +457,7 @@
     var height;
 
     var appOrientation = this.manifest.orientation;
-    var orientation = OrientationObserver.determine(appOrientation);
+    var orientation = this.determineOrientation(appOrientation);
 
     this.frame.classList.remove(this.currentOrientation);
     this.currentOrientation = orientation;
@@ -489,6 +486,35 @@
   AppWindow.prototype.isFullScreen = function aw_isFullScreen() {
     return this._fullScreen;
   };
+
+  AppWindow.prototype._defaultOrientation = null;
+
+  AppWindow.prototype.determineOrientation =
+    function aw_determineOrientation(orientation) {
+      if (this._defaultOrientation) {
+        return this._defaultOrientation;
+      } else if (!orientation) {
+        this._defaultOrientation = 'portrait-primary';
+        return this._defaultOrientation;
+      }
+
+      if (!Array.isArray(orientation))
+        orientation = [orientation];
+
+      orientation.every(function orientationIterator(o) {
+        if (o.endsWith('-primary') || o.endsWith('-secondary')) {
+          this._defaultOrientation = o;
+          return false;
+        }
+      }, this);
+
+      // Make a guess to the orientation,
+      // if there's no '-primary' or '-secondary' suffix.
+      if (!this._defaultOrientation)
+        this._defaultOrientation = orientation[0] + '-primary';
+
+      return this._defaultOrientation;
+    };
 
   // Queueing a cleaning task for styles set for rotate transition.
   // We need to clear rotate after orientation changes; however when

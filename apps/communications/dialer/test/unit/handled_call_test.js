@@ -491,6 +491,38 @@ suite('dialer/handled_call', function() {
         assert.equal(contact.tel[0].type, MockContacts.mType);
       });
     });
+
+    suite('emergency calls', function() {
+      test('is emergency call', function() {
+        mockCall = new MockCall('112', 'dialing');
+        subject = new HandledCall(mockCall, fakeNode);
+        mockCall._disconnect();
+        assert.isTrue(subject.recentsEntry.emergency);
+      });
+
+      test('is not emergency call', function() {
+        mockCall = new MockCall('111', 'dialing');
+        subject = new HandledCall(mockCall, fakeNode);
+        mockCall._disconnect();
+        assert.isFalse(subject.recentsEntry.emergency);
+      });
+    });
+
+    suite('voicemail calls', function() {
+      test('is voicemail call', function() {
+        mockCall = new MockCall('123', 'dialing');
+        subject = new HandledCall(mockCall, fakeNode);
+        mockCall._disconnect();
+        assert.isTrue(subject.recentsEntry.voicemail);
+      });
+
+      test('is not voicemail call', function() {
+        mockCall = new MockCall('111', 'dialing');
+        subject = new HandledCall(mockCall, fakeNode);
+        mockCall._disconnect();
+        assert.isFalse(subject.recentsEntry.voicemail);
+      });
+    });
   });
 
   suite('without node', function() {
@@ -612,6 +644,31 @@ suite('dialer/handled_call', function() {
       subject.replacePhoneNumber('12345678');
       subject.restorePhoneNumber();
       assert.equal(numberNode.textContent, 'test name');
+    });
+
+    test('check restore withheld-number', function() {
+      mockCall = new MockCall('', 'incoming');
+      subject = new HandledCall(mockCall, fakeNode);
+
+      subject.restorePhoneNumber();
+      assert.equal(numberNode.textContent, 'withheld-number');
+    });
+
+   test('check restore voicemail number', function() {
+      mockCall = new MockCall('123', 'incoming');
+      subject = new HandledCall(mockCall, fakeNode);
+
+      subject.restorePhoneNumber();
+      assert.equal(numberNode.textContent, 'voiceMail');
+    });
+
+   test('check restore emergency number', function() {
+      mockCall = new MockCall('112', 'incoming');
+      mockCall.emergency = true;
+      subject = new HandledCall(mockCall, fakeNode);
+
+      subject.restorePhoneNumber();
+      assert.equal(numberNode.textContent, 'emergencyNumber');
     });
   });
 

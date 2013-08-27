@@ -136,9 +136,10 @@ var StatusBar = {
     // Refresh the time to reflect locale changes
     this.update.time.call(this, new Date());
 
-    // Hide clock when initializing since this is handled by the event
-    // listeners for 'lock', 'unlock', and 'lockpanelchange'
-    this.icons.time.hidden = true;
+    // If it is locked, hide clock when initializing since this is handled by
+    // the event listeners for 'lock', 'unlock', and 'lockpanelchange'. If not,
+    // shows the clock.
+    this.icons.time.hidden = this.screen.classList.contains('locked');
 
     var settings = {
       'ril.radio.disabled': ['signal', 'data'],
@@ -196,6 +197,11 @@ var StatusBar = {
     window.addEventListener('lock', this);
     window.addEventListener('unlock', this);
     window.addEventListener('lockpanelchange', this);
+
+    // Listen to 'attentionscreenshow' and 'attentionscreenhide' from attention
+    // screen to correctly show/hide statusbar when triggering attention screen
+    window.addEventListener('attentionscreenshow', this);
+    window.addEventListener('attentionscreenhide', this);
 
     // Listen to 'mozfullscreenchange' to see if we should hide statusbar
     window.addEventListener('mozfullscreenchange', this);
@@ -295,14 +301,16 @@ var StatusBar = {
         this.icons.time.hidden = false;
       case 'appopen':
       case 'mozfullscreenchange':
-        if (this.screen.classList.contains('fullscreen-app') ||
+      case 'attentionscreenhide':
+        // XXX: Since watching 'fullscreen-app' style of screenElement is not
+        // realible, we turn to look into WindowManager instead.
+        if ((typeof WindowManager != 'undefined' &&
+            WindowManager.getCurrentDisplayedApp().isFullScreen()) ||
             document.mozFullScreen) {
           this.hide();
         } else {
           this.show();
         }
-
-        this.clock.start(this.update.time.bind(this));
         break;
 
       case 'lockpanelchange':
@@ -313,6 +321,7 @@ var StatusBar = {
         }
         break;
 
+      case 'attentionscreenshow':
       case 'appwillclose':
       case 'home':
       case 'holdhome':
@@ -323,10 +332,12 @@ var StatusBar = {
 
   show: function sb_show() {
     this.element.classList.remove('hidden');
+    this.clock.start(this.update.time.bind(this));
   },
 
   hide: function sb_hide() {
     this.element.classList.add('hidden');
+    this.clock.stop();
   },
 
   setActive: function sb_setActive(active) {
