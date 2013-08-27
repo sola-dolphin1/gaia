@@ -161,8 +161,6 @@ var NotificationScreen = {
       return;
     }
 
-    this._notification.classList.add('disappearing');
-
     var notification = this._notification;
     this._notification = null;
 
@@ -189,6 +187,8 @@ var NotificationScreen = {
         });
       });
     });
+
+    notification.classList.add('disappearing');
   },
 
   tap: function ns_tap(notificationNode) {

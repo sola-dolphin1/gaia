@@ -326,14 +326,14 @@ var Contacts = (function() {
         data['tel'] = [{
           'value': phoneNumber,
           'carrier': null,
-          'type': TAG_OPTIONS['phone-type'][0].value
+          'type': TAG_OPTIONS['phone-type'][0].type
         }];
       }
       if (params.hasOwnProperty('email')) {
         var email = params['email'];
         data['email'] = [{
           'value': email,
-          'type': TAG_OPTIONS['email-type'][0].value
+          'type': TAG_OPTIONS['email-type'][0].type
         }];
       }
       var hash = '#view-contact-form?extras=' +
@@ -341,8 +341,6 @@ var Contacts = (function() {
       if (fromUpdateActivity)
         hash += '&fromUpdateActivity=1';
       window.location.hash = hash;
-      contactsList.clearClickHandlers();
-      contactsList.handleClick(contactListClickHandler);
     });
   };
 
@@ -762,10 +760,10 @@ var Contacts = (function() {
       '/contacts/js/utilities/sdcard.js',
       '/contacts/js/utilities/vcard_parser.js',
       '/contacts/js/utilities/import_sim_contacts.js',
-      '/contacts/js/utilities/normalizer.js',
       '/contacts/js/utilities/status.js',
       '/contacts/js/utilities/overlay.js',
       '/contacts/js/search.js',
+      '/shared/js/text_normalizer.js',
       '/shared/style_unstable/progress_activity.css',
       '/shared/style/status.css',
       '/shared/style/switches.css',
@@ -782,7 +780,8 @@ var Contacts = (function() {
       var event = new CustomEvent('asyncScriptsLoaded');
       window.dispatchEvent(event);
       var handling = ActivityHandler.currentlyHandling;
-      if (!handling || ActivityHandler.activityName === 'pick') {
+      if (!handling || ActivityHandler.activityName === 'pick' ||
+                       ActivityHandler.activityName === 'update') {
         initContactsList();
         checkUrl();
       } else {

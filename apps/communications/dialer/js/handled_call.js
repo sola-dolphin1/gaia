@@ -11,7 +11,9 @@ function HandledCall(aCall, aNode) {
   this.recentsEntry = {
     date: Date.now(),
     type: this.call.state,
-    number: this.call.number
+    number: this.call.number,
+    emergency: this.call.emergency || false,
+    voicemail: false
   };
 
   this._initialState = this.call.state;
@@ -103,10 +105,12 @@ HandledCall.prototype.updateCallNumber = function hc_updateCallNumber() {
   var number = this.call.number;
   var node = this.numberNode;
   var additionalInfoNode = this.additionalInfoNode;
+  var self = this;
 
   if (!number) {
     LazyL10n.get(function localized(_) {
       node.textContent = _('withheld-number');
+      self._cachedInfo = _('withheld-number');
     });
     return;
   }
@@ -115,15 +119,16 @@ HandledCall.prototype.updateCallNumber = function hc_updateCallNumber() {
   if (isEmergencyNumber) {
     LazyL10n.get(function localized(_) {
       node.textContent = _('emergencyNumber');
+      self._cachedInfo = _('emergencyNumber');
     });
     return;
   }
 
-  var self = this;
   Voicemail.check(number, function(isVoicemailNumber) {
     if (isVoicemailNumber) {
       LazyL10n.get(function localized(_) {
         node.textContent = _('voiceMail');
+        self._cachedInfo = _('voiceMail');
       });
     } else {
       Contacts.findByNumber(number, lookupContact);
@@ -134,6 +139,7 @@ HandledCall.prototype.updateCallNumber = function hc_updateCallNumber() {
     if (contact) {
       var primaryInfo = Utils.getPhoneNumberPrimaryInfo(matchingTel, contact);
       var contactCopy = {
+        id: contact.id,
         name: contact.name,
         org: contact.org,
         tel: contact.tel
@@ -149,7 +155,7 @@ HandledCall.prototype.updateCallNumber = function hc_updateCallNumber() {
       }
       self.formatPhoneNumber('end', true);
       self._cachedAdditionalInfo =
-        Utils.getPhoneNumberAdditionalInfo(matchingTel, contact, number);
+        Utils.getPhoneNumberAdditionalInfo(matchingTel);
       self.replaceAdditionalContactInfo(self._cachedAdditionalInfo);
       if (contact.photo && contact.photo.length > 0) {
         self.photo = contact.photo[0];
@@ -279,7 +285,11 @@ HandledCall.prototype.disconnected = function hc_disconnected() {
         entry.contactInfo.matchingTel = JSON.parse(tel);
       }
     }
-    OnCallHandler.addRecentEntry(entry);
+
+    Voicemail.check(entry.number, function(isVoicemailNumber) {
+      entry.voicemail = isVoicemailNumber;
+      OnCallHandler.addRecentEntry(entry);
+    });
   }
 
   if (!this.node)

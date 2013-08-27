@@ -1279,7 +1279,7 @@ var Browser = {
         return {
           label: _('open-in-new-tab'),
           callback: function() {
-            self.openInNewTab(item.data);
+            self.openInNewTab(item.data.uri);
           }
         };
       case 'IMG':
@@ -1291,11 +1291,14 @@ var Browser = {
           'AUDIO': 'audio'
         };
         var type = typeMap[item.nodeName];
+        if (item.nodeName === 'VIDEO' && !item.data.hasVideo) {
+          type = 'audio';
+        }
 
         return {
           label: _('save-' + type),
           callback: function() {
-            self.saveMedia(item.data, type);
+            self.saveMedia(item.data.uri, type);
           }
         };
       default:
@@ -1880,8 +1883,6 @@ var Browser = {
 
       this.tab.classList.add('active');
       this.tab.style.MozTransition = '';
-      this.tab.style.position = 'absolute';
-      this.tab.style.width = e.target.parentNode.clientWidth + 'px';
     },
 
     pan: function tabSwipe_pan(e) {
@@ -1900,9 +1901,7 @@ var Browser = {
         return;
       }
       if (this.isCloseButton) {
-        this.tab.style.position = 'absolute';
         this.tab.style.left = '0px';
-        this.tab.style.width = this.containerWidth + 'px';
         this.deleteTab(100, this.containerWidth);
         return;
       }
